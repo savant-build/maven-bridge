@@ -15,14 +15,16 @@
  */
 package org.savantbuild.dep.maven;
 
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
+import org.jdom2.input.SAXBuilder;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The necessary information from the POM.
@@ -30,34 +32,71 @@ import java.util.List;
  * @author Brian Pontarelli
  */
 public class POM {
-  public List<MavenArtifact> dependencies;
+  public List<MavenArtifact> dependenciesDefinitions = new ArrayList<>();
+
+  public List<MavenArtifact> dependencies = new ArrayList<>();
+
+  public Map<String, String> properties = new HashMap<>();
 
   public String parentGroup;
   public String parentId;
   public String parentVersion;
-  public String parentPath;
 
-  public POM(Path file) {
-    DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-    Document document = builder.parse(file.toFile());
-    NodeList dependenciesElements = document.getElementsByTagName("dependencies");
-    if (dependenciesElements.getLength() > 0) {
-      Element dependenciesElement = (Element) dependenciesElements.item(0);
-      NodeList dependencyElements = dependenciesElement.getChildNodes();
-      for (int i = 0; i < dependencyElements.getLength(); i++) {
-        Element dependencyElement = (Element) dependencyElements.item(i);
-        parentGroup = dependencyElement.getElementsByTagName("groupId").item(0).getTextContent();
-        parentId = dependencyElement.getElementsByTagName("artifactId").item(0).getTextContent();
-        parentVersion = dependencyElement.getElementsByTagName("version").item(0).getTextContent();
+  public POM(Path file) throws RuntimeException {
+    SAXBuilder builder = new SAXBuilder();
+    try {
+      Element pomElement = builder.build(file.toFile()).getRootElement();
+
+      // Grab the parent info
+      Element parent = pomElement.getChild("parent");
+      if (parent != null) {
+        parentGroup = parent.getChildText("groupId");
+        parentId = parent.getChildText("artifactId");
+        parentVersion = parent.getChildText("version");
       }
+
+      // Grab the properties
+      Element properties = pomElement.getChild("properties");
+      if (properties != null) {
+        properties.getChildren().forEach((element) -> this.properties.put(element.getName(), element.getTextTrim()));
+      }
+
+      // Grab the dependencies (top-level)
+      Element dependencies = pomElement.getChild("dependencies");
+      if (dependencies != null) {
+        dependencies.getChildren().forEach((element) -> this.dependencies.add(parseArtifact(element)));
+      }
+
+      // Grab the dependencyManagement info (top-level)
+      Element dependencyManagement = pomElement.getChild("dependencyManagement");
+      if (dependencyManagement != null) {
+        dependencyManagement.getChildren().forEach((element) -> this.dependenciesDefinitions.add(parseArtifact(element)));
+      }
+    } catch (JDOMException | IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private MavenArtifact parseArtifact(Element element) {
+    MavenArtifact artifact = new MavenArtifact();
+    artifact.group = element.getChildText("groupId");
+    artifact.id = element.getChildText("artifactId");
+    artifact.version = element.getChildText("version");
+    artifact.type = element.getChildText("type");
+    artifact.optional = toBoolean(element.getChildText("scope"));
+
+    if (element.getChildren("exclusions").size() > 0) {
+      System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!! WARNING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+      System.out.println("This Maven artifact has a dependency [" + artifact + "] with exclusions. This indicates that the dependency is a broken project or the maintainers of this artifact are sloppy and have exclusions that are bogus.");
+      System.out.println("If the project [" + artifact + "] really depends on " + artifact.exclusions + " the they should have been marked as optional POM.");
+      System.out.println("There isn't much we can do here since Savant doesn't allow exclusions since they should never occur if people listing their dependencies correctly.");
+      System.out.println();
     }
 
-    NodeList parentElements = document.getElementsByTagName("parent");
-    if (parentElements.getLength() == 1) {
-      parentGroup = ((Element) parentElements.item(0)).getElementsByTagName("groupId").item(0).getTextContent();
-      parentId = ((Element) parentElements.item(0)).getElementsByTagName("artifactId").item(0).getTextContent();
-      parentVersion = ((Element) parentElements.item(0)).getElementsByTagName("version").item(0).getTextContent();
-      parentPath = ((Element) parentElements.item(0)).getElementsByTagName("version").item(0).getTextContent();
-    }
+    return artifact;
+  }
+
+  private boolean toBoolean(String value) {
+    return value != null && Boolean.parseBoolean(value);
   }
 }
