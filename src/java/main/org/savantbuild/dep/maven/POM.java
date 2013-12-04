@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * The necessary information from the POM.
@@ -32,15 +33,19 @@ import java.util.Map;
  * @author Brian Pontarelli
  */
 public class POM {
-  public List<MavenArtifact> dependenciesDefinitions = new ArrayList<>();
-
   public List<MavenArtifact> dependencies = new ArrayList<>();
 
-  public Map<String, String> properties = new HashMap<>();
+  public List<MavenArtifact> dependenciesDefinitions = new ArrayList<>();
+
+  public POM parent;
 
   public String parentGroup;
+
   public String parentId;
+
   public String parentVersion;
+
+  public Map<String, String> properties = new HashMap<>();
 
   public POM(Path file) throws RuntimeException {
     SAXBuilder builder = new SAXBuilder();
@@ -70,11 +75,25 @@ public class POM {
       // Grab the dependencyManagement info (top-level)
       Element dependencyManagement = pomElement.getChild("dependencyManagement");
       if (dependencyManagement != null) {
-        dependencyManagement.getChildren().forEach((element) -> this.dependenciesDefinitions.add(parseArtifact(element)));
+        dependencyManagement.getChildren().forEach((
+            element) -> this.dependenciesDefinitions.add(parseArtifact(element)));
       }
     } catch (JDOMException | IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  public String resolveDependencyVersion(MavenArtifact dependency) {
+    Optional<MavenArtifact> optional = dependenciesDefinitions.stream().filter((def) -> def.group.equals(dependency.group) && def.id.equals(dependency.id)).findFirst();
+    if (!optional.isPresent() && parent != null) {
+      return parent.resolveDependencyVersion(dependency);
+    }
+
+    if (optional.isPresent()) {
+      return optional.get().version;
+    }
+
+    return null;
   }
 
   private MavenArtifact parseArtifact(Element element) {

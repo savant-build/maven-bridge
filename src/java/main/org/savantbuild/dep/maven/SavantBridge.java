@@ -15,6 +15,7 @@
  */
 package org.savantbuild.dep.maven;
 
+import org.apache.commons.lang.StringUtils;
 import org.savantbuild.dep.DefaultDependencyService;
 import org.savantbuild.dep.domain.Artifact;
 import org.savantbuild.dep.domain.ArtifactID;
@@ -27,7 +28,6 @@ import org.savantbuild.dep.io.MD5;
 import org.savantbuild.dep.net.NetTools;
 import org.savantbuild.dep.workflow.PublishWorkflow;
 import org.savantbuild.dep.workflow.process.CacheProcess;
-import org.testng.util.Strings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -53,7 +53,7 @@ import static java.util.Arrays.asList;
 public class SavantBridge {
   private final CacheProcess cacheProcess;
 
-  private final Map<String, String> groupMappings;
+  private final GroupMappings groupMappings;
 
   private final BufferedReader input;
 
@@ -63,7 +63,7 @@ public class SavantBridge {
 
   private final DefaultDependencyService service;
 
-  public SavantBridge(Path directory, Map<String, String> groupMappings) {
+  public SavantBridge(Path directory, GroupMappings groupMappings) {
     this.input = new BufferedReader(new InputStreamReader(System.in, Charset.forName("UTF-8")));
     this.groupMappings = groupMappings;
     this.service = new DefaultDependencyService();
@@ -75,12 +75,9 @@ public class SavantBridge {
 
   public void run() {
     MavenArtifact mavenArtifact = new MavenArtifact();
-    mavenArtifact.group = ask("Maven group (i.e. commons-collections)", null, "Invalid input. Please re-enter",
-        (answer) -> !Strings.isNullOrEmpty(answer));
-    mavenArtifact.id = ask("Maven artifact id (i.e. commons-collections)", null, "Invalid input. Please re-enter",
-        (answer) -> !Strings.isNullOrEmpty(answer));
-    mavenArtifact.version = ask("Maven artifact version (i.e. 3.0.GA.1)", null, "Invalid input. Please re-enter",
-        (answer) -> !Strings.isNullOrEmpty(answer));
+    mavenArtifact.group = ask("Maven group (i.e. commons-collections)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
+    mavenArtifact.id = ask("Maven artifact id (i.e. commons-collections)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
+    mavenArtifact.version = ask("Maven artifact version (i.e. 3.0.GA.1)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
 
     buildMavenGraph(mavenArtifact, new HashSet<>());
     downloadAndProcess(mavenArtifact);
@@ -97,7 +94,7 @@ public class SavantBridge {
         throw new RuntimeException(e);
       }
 
-      if (Strings.isNullOrEmpty(answer) && defaultValue != null) {
+      if (StringUtils.isBlank(answer) && defaultValue != null) {
         return defaultValue;
       }
 
@@ -132,26 +129,35 @@ public class SavantBridge {
     }
 
     Path pomFile = downloadItem(mavenArtifact, mavenArtifact.getPOM());
-    POM pom = new POM(pomFile);
+    final POM pom = new POM(pomFile);
     final Map<String, String> properties = pom.properties;
     mavenArtifact.dependencies = new ArrayList<>(pom.dependencies);
 
     // Load the parent POM's dependencies and properties
-    while (pom.parentId != null) {
-      MavenArtifact parentArtifact = new MavenArtifact(pom.parentGroup, pom.parentId, pom.parentVersion);
+    POM current = pom;
+    while (current.parentId != null) {
+      MavenArtifact parentArtifact = new MavenArtifact(current.parentGroup, current.parentId, current.parentVersion);
       pomFile = downloadItem(parentArtifact, parentArtifact.getPOM());
-      pom = new POM(pomFile);
-      properties.putAll(pom.properties);
-      mavenArtifact.dependencies.addAll(pom.dependencies);
+      current.parent = new POM(pomFile);
+      properties.putAll(current.properties);
+      mavenArtifact.dependencies.addAll(current.dependencies);
+      current = current.parent;
     }
 
-    // Replace the properties
+    // Replace the properties and resolve artifact versions from parent POMs
     mavenArtifact.dependencies.forEach((dependency) -> {
       dependency.group = replaceProperties(dependency.group, properties);
       dependency.id = replaceProperties(dependency.id, properties);
       dependency.version = replaceProperties(dependency.version, properties);
       dependency.type = replaceProperties(dependency.type, properties);
       dependency.scope = replaceProperties(dependency.scope, properties);
+
+      if (dependency.version == null) {
+        dependency.version = pom.resolveDependencyVersion(dependency);
+        if (dependency.version == null) {
+          throw new RuntimeException("Unable to determine version for dependency [" + dependency + "]");
+        }
+      }
     });
 
     visitedArtifacts.add(mavenArtifact);
@@ -177,15 +183,13 @@ public class SavantBridge {
     System.out.println("Converting Maven artifact [" + mavenArtifact + "] to a Savant Artifact");
     System.out.println("---------------------------------------------------------------------------------------------------------");
 
-    String savantGroup;
-    if (groupMappings.containsKey(mavenArtifact.group)) {
-      savantGroup = groupMappings.get(mavenArtifact.group);
-    } else if (!mavenArtifact.group.contains(".")) {
+    String savantGroup = groupMappings.map(mavenArtifact.group);
+    if (!savantGroup.contains(".")) {
       savantGroup = ask("That group looks weaksauce. Enter the group to use with Savant", mavenArtifact.group, null, null);
 
       // Store the mapping if they changed the group
       if (!mavenArtifact.group.equals(savantGroup)) {
-        groupMappings.put(mavenArtifact.group, savantGroup);
+        groupMappings.add(mavenArtifact.group, savantGroup);
       }
     } else {
       savantGroup = mavenArtifact.group;

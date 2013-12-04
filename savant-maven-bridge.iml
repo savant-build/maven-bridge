@@ -8,17 +8,37 @@
       <sourceFolder url="file://$MODULE_DIR$/src/java/main" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src/java/test" isTestSource="true" />
     </content>
-    <orderEntry type="jdk" jdkName="1.8" jdkType="JavaSDK" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="jdk" jdkName="1.8" jdkType="JavaSDK" />
     <orderEntry type="module" module-name="savant-dependency-management" />
     <orderEntry type="module-library">
       <library>
         <CLASSES>
-          <root url="jar://$MODULE_DIR$/../../../jdom-2/jdom-2.0.5.jar!/" />
+          <root url="jar://$MODULE_DIR$/libs/jdom-2.0.5.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES>
-          <root url="jar://$MODULE_DIR$/../../../jdom-2/jdom-2.0.5-sources.jar!/" />
+          <root url="jar://$MODULE_DIR$/libs/jdom-2.0.5-sources.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/libs/commons-lang-2.6.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/libs/testng-6.8.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$MODULE_DIR$/libs/testng-6.8-sources.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>

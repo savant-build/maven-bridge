@@ -15,17 +15,10 @@
  */
 package org.savantbuild.dep.maven;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
 
 /**
  * Main entry point for the Savant-Maven-Bridge.
@@ -54,41 +47,13 @@ public class Main {
     }
 
     // Load the group mapping file
-    Map<String, String> mappings = loadMappingFile(directory);
+    GroupMappings mappings = new GroupMappings(directory);
 
     // Run the bridge
     SavantBridge bridge = new SavantBridge(directory, mappings);
     bridge.run();
 
     // Save the new mappings out
-    writeMappingFile(directory, mappings);
-  }
-
-  private static Map<String, String> loadMappingFile(Path directory) throws IOException {
-    Properties properties = new Properties();
-    Path mappingFile = directory.resolve("maven-group-mappings.properties");
-    if (Files.isRegularFile(mappingFile)) {
-      try (BufferedReader bufferedReader = Files.newBufferedReader(mappingFile, Charset.forName("UTF-8"))) {
-        properties.load(bufferedReader);
-      }
-    }
-
-    Map<String, String> result = new HashMap<>();
-    properties.forEach((key, value) -> result.put(key.toString(), value.toString()));
-    return result;
-  }
-
-  private static void writeMappingFile(Path directory, Map<String, String> mappings) throws IOException {
-    Properties properties = new Properties();
-    properties.putAll(mappings);
-
-    Path mappingFile = directory.resolve("maven-group-mappings.properties");
-    if (!Files.isRegularFile(mappingFile)) {
-      Files.createFile(mappingFile);
-    }
-
-    try (BufferedWriter bufferedWriter = Files.newBufferedWriter(mappingFile, Charset.forName("UTF-8"), StandardOpenOption.TRUNCATE_EXISTING)) {
-      properties.store(bufferedWriter, null);
-    }
+    mappings.store();
   }
 }

@@ -15,18 +15,12 @@
  */
 package org.savantbuild.dep;
 
-import com.sun.net.httpserver.HttpServer;
+import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.Test;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Base64;
-
-import static org.testng.Assert.assertEquals;
-import static org.testng.AssertJUnit.fail;
 
 /**
  * Base class for unit tests.
@@ -35,48 +29,13 @@ import static org.testng.AssertJUnit.fail;
  */
 @Test(groups = "unit")
 public abstract class BaseUnitTest {
-  /**
-   * Creates a file server that will accept HTTP connections on localhost:7000 and return the bytes of the file in the
-   * request starting from the project directory.
-   *
-   * @param username (Optional) The username to verify was sent to the server in the Authentication header. Leave blank
-   *                 to not check.
-   * @param password (Optional) The password to verify was sent to the server in the Authentication header. Leave blank
-   *                 to not check.
-   * @return The server.
-   * @throws IOException If the server could not be created.
-   */
-  protected HttpServer makeFileServer(String username, String password) throws IOException {
-    InetSocketAddress localhost = new InetSocketAddress(7000);
-    HttpServer server = HttpServer.create(localhost, 0);
-    server.createContext("/", (httpExchange) -> {
-      if (username != null) {
-        assertEquals(httpExchange.getRequestHeaders().get("Authorization").get(0), "Basic " + Base64.getEncoder().encodeToString((username + ":" + password).getBytes()));
-      }
+  public static Path projectDir;
 
-      // Verify a GET request
-      if (!httpExchange.getRequestMethod().equals("GET")) {
-        fail("Should have been a GET request");
-      }
-
-      // Close the input stream because we don't need to read anything
-      httpExchange.getRequestBody().close();
-
-      String path = httpExchange.getRequestURI().getPath();
-      Path file = Paths.get(path.substring(1));
-      if (Files.isRegularFile(file)) {
-        httpExchange.sendResponseHeaders(200, Files.size(file));
-        byte[] bytes = Files.readAllBytes(file);
-        httpExchange.getResponseBody().write(bytes);
-        httpExchange.getResponseBody().flush();
-        httpExchange.getResponseBody().close();
-      } else {
-        httpExchange.sendResponseHeaders(404, 0);
-      }
-    });
-
-    server.start();
-
-    return server;
+  @BeforeSuite
+  public static void beforeSuite() {
+    projectDir = Paths.get("");
+    if (!Files.isRegularFile(projectDir.resolve("LICENSE"))) {
+      projectDir = projectDir.resolve("savant-maven-bridge");
+    }
   }
 }
