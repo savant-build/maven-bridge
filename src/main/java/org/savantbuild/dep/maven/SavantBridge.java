@@ -24,8 +24,8 @@ import org.savantbuild.dep.domain.License;
 import org.savantbuild.dep.domain.Publication;
 import org.savantbuild.dep.domain.Version;
 import org.savantbuild.dep.domain.VersionException;
-import org.savantbuild.dep.io.MD5;
-import org.savantbuild.dep.net.NetTools;
+import org.savantbuild.security.MD5;
+import org.savantbuild.net.NetTools;
 import org.savantbuild.dep.workflow.PublishWorkflow;
 import org.savantbuild.dep.workflow.process.CacheProcess;
 import org.savantbuild.output.Output;
@@ -69,7 +69,7 @@ public class SavantBridge {
     this.input = new BufferedReader(new InputStreamReader(System.in, Charset.forName("UTF-8")));
     this.groupMappings = groupMappings;
 
-    Output output = new SystemOutOutput(System.out, true);
+    Output output = new SystemOutOutput(true);
     this.service = new DefaultDependencyService(output);
 
     // Cache only workflow that will check if the artifact coming from Maven already exists in our repository
