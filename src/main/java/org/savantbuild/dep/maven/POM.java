@@ -53,27 +53,28 @@ public class POM {
       Element pomElement = builder.build(file.toFile()).getRootElement();
 
       // Grab the parent info
-      Element parent = pomElement.getChild("parent");
+      Element parent = pomElement.getChild("parent", pomElement.getNamespace());
       if (parent != null) {
-        parentGroup = parent.getChildText("groupId");
-        parentId = parent.getChildText("artifactId");
-        parentVersion = parent.getChildText("version");
+        parentGroup = parent.getChildText("groupId", pomElement.getNamespace());
+        parentId = parent.getChildText("artifactId", pomElement.getNamespace());
+        parentVersion = parent.getChildText("version", pomElement.getNamespace());
       }
 
       // Grab the properties
-      Element properties = pomElement.getChild("properties");
+      Element properties = pomElement.getChild("properties", pomElement.getNamespace());
       if (properties != null) {
         properties.getChildren().forEach((element) -> this.properties.put(element.getName(), element.getTextTrim()));
       }
 
       // Grab the dependencies (top-level)
-      Element dependencies = pomElement.getChild("dependencies");
+      Element dependencies = pomElement.getChild("dependencies", pomElement.getNamespace());
+      System.out.println("Has deps " + dependencies);
       if (dependencies != null) {
         dependencies.getChildren().forEach((element) -> this.dependencies.add(parseArtifact(element)));
       }
 
       // Grab the dependencyManagement info (top-level)
-      Element dependencyManagement = pomElement.getChild("dependencyManagement");
+      Element dependencyManagement = pomElement.getChild("dependencyManagement", pomElement.getNamespace());
       if (dependencyManagement != null) {
         dependencyManagement.getChildren().forEach((
             element) -> this.dependenciesDefinitions.add(parseArtifact(element)));
@@ -98,13 +99,17 @@ public class POM {
 
   private MavenArtifact parseArtifact(Element element) {
     MavenArtifact artifact = new MavenArtifact();
-    artifact.group = element.getChildText("groupId");
-    artifact.id = element.getChildText("artifactId");
-    artifact.version = element.getChildText("version");
-    artifact.type = element.getChildText("type");
-    artifact.optional = toBoolean(element.getChildText("scope"));
+    artifact.group = element.getChildText("groupId", element.getNamespace());
+    artifact.id = element.getChildText("artifactId", element.getNamespace());
+    artifact.version = element.getChildText("version", element.getNamespace());
+    artifact.type = element.getChildText("type", element.getNamespace());
+    artifact.optional = toBoolean(element.getChildText("optional", element.getNamespace()));
+    artifact.scope = element.getChildText("scope", element.getNamespace());
+    if (artifact.scope == null) {
+      artifact.scope = "compile";
+    }
 
-    if (element.getChildren("exclusions").size() > 0) {
+    if (element.getChildren("exclusions", element.getNamespace()).size() > 0) {
       System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!! WARNING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
       System.out.println("This Maven artifact has a dependency [" + artifact + "] with exclusions. This indicates that the dependency is a broken project or the maintainers of this artifact are sloppy and have exclusions that are bogus.");
       System.out.println("If the project [" + artifact + "] really depends on " + artifact.exclusions + " the they should have been marked as optional POM.");
@@ -116,6 +121,7 @@ public class POM {
   }
 
   private boolean toBoolean(String value) {
+    System.out.println("optional is " + value);
     return value != null && Boolean.parseBoolean(value);
   }
 }

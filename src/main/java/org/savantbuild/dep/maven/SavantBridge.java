@@ -37,6 +37,7 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -133,8 +134,14 @@ public class SavantBridge {
     }
 
     Path pomFile = downloadItem(mavenArtifact, mavenArtifact.getPOM());
+    try {
+      System.out.println("POM is " + new String(Files.readAllBytes(pomFile)));
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
     final POM pom = new POM(pomFile);
     final Map<String, String> properties = pom.properties;
+    System.out.println("Deps are " + pom.dependencies);
     mavenArtifact.dependencies = new ArrayList<>(pom.dependencies);
 
     // Load the parent POM's dependencies and properties
@@ -165,6 +172,16 @@ public class SavantBridge {
     });
 
     visitedArtifacts.add(mavenArtifact);
+    mavenArtifact.dependencies.removeIf((dependency) -> {
+      if (dependency.optional) {
+        return true;
+      }
+
+      String includeString = ask("Include [" + dependency + "] in the Savant AMD file (y/n) ", "y", "Invalid response (y/n)",
+          (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n")));
+      return includeString.equals("n");
+    });
+
     mavenArtifact.dependencies.forEach((dependency) -> buildMavenGraph(dependency, visitedArtifacts));
     visitedArtifacts.remove(mavenArtifact);
   }
