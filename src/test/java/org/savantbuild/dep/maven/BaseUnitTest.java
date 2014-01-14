@@ -13,14 +13,14 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-package org.savantbuild.dep;
-
-import org.testng.annotations.BeforeSuite;
-import org.testng.annotations.Test;
+package org.savantbuild.dep.maven;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
+import org.testng.annotations.BeforeSuite;
+import org.testng.annotations.Test;
 
 /**
  * Base class for unit tests.
@@ -35,7 +35,7 @@ public abstract class BaseUnitTest {
   public static void beforeSuite() {
     projectDir = Paths.get("");
     if (!Files.isRegularFile(projectDir.resolve("LICENSE"))) {
-      projectDir = projectDir.resolve("savant-maven-bridge");
+      projectDir = projectDir.resolve("../savant-maven-bridge");
     }
   }
 }

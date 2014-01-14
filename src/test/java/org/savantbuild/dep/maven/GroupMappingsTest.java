@@ -15,10 +15,9 @@
  */
 package org.savantbuild.dep.maven;
 
-import org.savantbuild.dep.BaseUnitTest;
-import org.testng.annotations.Test;
-
 import java.io.IOException;
+
+import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
 
