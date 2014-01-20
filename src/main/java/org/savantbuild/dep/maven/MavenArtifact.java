@@ -15,13 +15,13 @@
  */
 package org.savantbuild.dep.maven;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.savantbuild.dep.domain.Artifact;
 import org.savantbuild.dep.domain.Dependencies;
 import org.savantbuild.dep.domain.Dependency;
 import org.savantbuild.dep.domain.DependencyGroup;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Maven artifact.
@@ -97,7 +97,7 @@ public class MavenArtifact {
         savantDependencies.groups.put(savantDependencyGroup.type, savantDependencyGroup);
       }
 
-      savantDependencyGroup.dependencies.add(new Dependency(savantArtifact.id, savantArtifact.version, optional));
+      savantDependencyGroup.dependencies.add(new Dependency(dependency.savantArtifact.id, dependency.savantArtifact.version, dependency.optional));
     });
 
     return savantDependencies;

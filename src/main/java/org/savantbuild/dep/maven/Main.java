@@ -32,13 +32,16 @@ public class Main {
    * @param args CLI args.
    */
   public static void main(String[] args) throws IOException {
-    if (args.length != 1) {
-      System.err.println("Usage: savant-maven-bridge <directory>");
+    if (args.length != 1 && args.length != 2) {
+      System.err.println("Usage: savant-maven-bridge [--debug] <directory>");
       System.exit(1);
     }
 
+    boolean debug = args.length == 2 && args[0].equals("--debug");
+    String directoryName = args.length == 1 ? args[0] : args[2];
+
     // Get the working directory
-    Path directory = Paths.get(args[0]);
+    Path directory = Paths.get(directoryName);
     if (Files.isRegularFile(directory)) {
       System.err.println("Invalid working directory [" + directory + "]. It is a file");
       System.exit(1);
@@ -50,7 +53,7 @@ public class Main {
     GroupMappings mappings = new GroupMappings(directory);
 
     // Run the bridge
-    SavantBridge bridge = new SavantBridge(directory, mappings);
+    SavantBridge bridge = new SavantBridge(directory, mappings, debug);
     bridge.run();
 
     // Save the new mappings out

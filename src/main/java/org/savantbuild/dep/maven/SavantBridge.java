@@ -15,6 +15,20 @@
  */
 package org.savantbuild.dep.maven;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Predicate;
+
 import org.apache.commons.lang.StringUtils;
 import org.savantbuild.dep.DefaultDependencyService;
 import org.savantbuild.dep.domain.Artifact;
@@ -24,27 +38,13 @@ import org.savantbuild.dep.domain.License;
 import org.savantbuild.dep.domain.Publication;
 import org.savantbuild.dep.domain.Version;
 import org.savantbuild.dep.domain.VersionException;
-import org.savantbuild.security.MD5;
-import org.savantbuild.net.NetTools;
 import org.savantbuild.dep.workflow.PublishWorkflow;
 import org.savantbuild.dep.workflow.process.CacheProcess;
+import org.savantbuild.dep.xml.ArtifactTools;
+import org.savantbuild.net.NetTools;
 import org.savantbuild.output.Output;
 import org.savantbuild.output.SystemOutOutput;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Predicate;
+import org.savantbuild.security.MD5;
 
 import static java.util.Arrays.asList;
 
@@ -66,7 +66,9 @@ public class SavantBridge {
 
   private final DefaultDependencyService service;
 
-  public SavantBridge(Path directory, GroupMappings groupMappings) {
+  private final boolean debug;
+
+  public SavantBridge(Path directory, GroupMappings groupMappings, boolean debug) {
     this.input = new BufferedReader(new InputStreamReader(System.in, Charset.forName("UTF-8")));
     this.groupMappings = groupMappings;
 
@@ -76,6 +78,7 @@ public class SavantBridge {
     // Cache only workflow that will check if the artifact coming from Maven already exists in our repository
     this.cacheProcess = new CacheProcess(output, directory.toString());
     this.publishWorkflow = new PublishWorkflow(this.cacheProcess);
+    this.debug = debug;
   }
 
   public void run() {
@@ -134,15 +137,21 @@ public class SavantBridge {
     }
 
     Path pomFile = downloadItem(mavenArtifact, mavenArtifact.getPOM());
-    try {
-      System.out.println("POM is " + new String(Files.readAllBytes(pomFile)));
-    } catch (IOException e) {
-      e.printStackTrace();
+    if (pomFile == null) {
+      throw new RuntimeException("Invalid Maven artifact [" + mavenArtifact + "]. It doesn't appear to exist in the Maven repository. Is it correct?");
     }
+
+    if (debug) {
+      try {
+        System.out.println("POM is " + new String(Files.readAllBytes(pomFile)));
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+
     final POM pom = new POM(pomFile);
     final Map<String, String> properties = pom.properties;
-    System.out.println("Deps are " + pom.dependencies);
-    mavenArtifact.dependencies = new ArrayList<>(pom.dependencies);
+    mavenArtifact.dependencies.addAll(pom.dependencies);
 
     // Load the parent POM's dependencies and properties
     POM current = pom;
@@ -171,7 +180,12 @@ public class SavantBridge {
       }
     });
 
-    visitedArtifacts.add(mavenArtifact);
+    // Remove dups
+    Set<MavenArtifact> dependencies = new HashSet<>(mavenArtifact.dependencies);
+    mavenArtifact.dependencies.clear();
+    mavenArtifact.dependencies.addAll(dependencies);
+
+    // Ask which dependencies to include in the AMD
     mavenArtifact.dependencies.removeIf((dependency) -> {
       if (dependency.optional) {
         return true;
@@ -182,6 +196,8 @@ public class SavantBridge {
       return includeString.equals("n");
     });
 
+    // Traverse graph
+    visitedArtifacts.add(mavenArtifact);
     mavenArtifact.dependencies.forEach((dependency) -> buildMavenGraph(dependency, visitedArtifacts));
     visitedArtifacts.remove(mavenArtifact);
   }
@@ -232,6 +248,15 @@ public class SavantBridge {
 
       Path sourceFile = downloadItem(mavenArtifact, mavenArtifact.getSourceFile());
       ArtifactMetaData amd = new ArtifactMetaData(mavenArtifact.getSavantDependencies(), mavenArtifact.savantArtifact.license);
+      if (debug) {
+        try {
+          Path temp = ArtifactTools.generateXML(amd);
+          System.out.println("Writing out AMD file");
+          System.out.println(new String(Files.readAllBytes(temp)));
+        } catch (IOException e) {
+          // never
+        }
+      }
       Publication publication = new Publication(mavenArtifact.savantArtifact, amd, file, sourceFile);
       service.publish(publication, publishWorkflow);
     }
@@ -247,7 +272,7 @@ public class SavantBridge {
       URI uri = NetTools.build("http://repo1.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item);
       return NetTools.downloadToPath(uri, null, null, md5);
     } catch (URISyntaxException | IOException e) {
-      throw new RuntimeException("Invalid URI", e);
+      throw new RuntimeException("ERROR", e);
     }
   }
 

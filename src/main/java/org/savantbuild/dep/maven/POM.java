@@ -15,10 +15,6 @@
  */
 package org.savantbuild.dep.maven;
 
-import org.jdom2.Element;
-import org.jdom2.JDOMException;
-import org.jdom2.input.SAXBuilder;
-
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -26,6 +22,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
+import org.jdom2.input.SAXBuilder;
 
 /**
  * The necessary information from the POM.
@@ -68,7 +68,6 @@ public class POM {
 
       // Grab the dependencies (top-level)
       Element dependencies = pomElement.getChild("dependencies", pomElement.getNamespace());
-      System.out.println("Has deps " + dependencies);
       if (dependencies != null) {
         dependencies.getChildren().forEach((element) -> this.dependencies.add(parseArtifact(element)));
       }
@@ -76,8 +75,8 @@ public class POM {
       // Grab the dependencyManagement info (top-level)
       Element dependencyManagement = pomElement.getChild("dependencyManagement", pomElement.getNamespace());
       if (dependencyManagement != null) {
-        dependencyManagement.getChildren().forEach((
-            element) -> this.dependenciesDefinitions.add(parseArtifact(element)));
+        Element depMgntDeps = dependencyManagement.getChild("dependencies", dependencyManagement.getNamespace());
+        depMgntDeps.getChildren().forEach((element) -> this.dependenciesDefinitions.add(parseArtifact(element)));
       }
     } catch (JDOMException | IOException e) {
       throw new RuntimeException(e);
@@ -111,9 +110,9 @@ public class POM {
 
     if (element.getChildren("exclusions", element.getNamespace()).size() > 0) {
       System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!! WARNING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      System.out.println("This Maven artifact has a dependency [" + artifact + "] with exclusions. This indicates that the dependency is a broken project or the maintainers of this artifact are sloppy and have exclusions that are bogus.");
-      System.out.println("If the project [" + artifact + "] really depends on " + artifact.exclusions + " the they should have been marked as optional POM.");
-      System.out.println("There isn't much we can do here since Savant doesn't allow exclusions since they should never occur if people listing their dependencies correctly.");
+      System.out.println("This Maven artifact has a dependency [" + artifact + "] with exclusions.");
+      System.out.println("This indicates that the artifact [" + artifact + "] declared a bad dependency or declared an optional dependency as required.");
+      System.out.println("There isn't much we can do here since Savant doesn't allow exclusions because they should not occur when dependencies are listed and configured correctly.");
       System.out.println();
     }
 
@@ -121,7 +120,6 @@ public class POM {
   }
 
   private boolean toBoolean(String value) {
-    System.out.println("optional is " + value);
     return value != null && Boolean.parseBoolean(value);
   }
 }

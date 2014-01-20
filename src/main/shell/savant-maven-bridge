@@ -1,16 +1,18 @@
 #!/bin/sh
 
 bin_dir=$(dirname $0)
-savant_home=${bin_dir%%\/bin}
+cd ${bin_dir}/..
+home_dir=${PWD}
+cd - > /dev/null 2>&1
 
 classpath=
-for f in $(ls ${savant_home}/lib); do
-  classpath=${classpath}:${savant_home}/lib/${f}
+for f in $(ls ${home_dir}/lib); do
+  classpath=${classpath}:${home_dir}/lib/${f}
 done
 
 if [[ $(uname -a | grep -i cygwin) != "" ]]; then
   classpath=$(cygpath -wp ${classpath})
-  savant_home=$(cygpath -wa ${savant_home})
+  home_dir=$(cygpath -wa ${home_dir})
 fi
 
 java -cp ${classpath} org.savantbuild.dep.maven.Main $@
