@@ -45,6 +45,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module" module-name="savant-utils" />
+    <orderEntry type="library" name="Groovy 2.2" level="application" />
   </component>
 </module>
 
