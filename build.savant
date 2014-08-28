@@ -13,11 +13,15 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-savantVersion = "0.1.0-{integration}"
+savantVersion = "0.2.0-{integration}"
 
-project(group: "org.savantbuild", name: "savant-maven-bridge", version: "0.1.0", license: "Apachev2") {
+project(group: "org.savantbuild", name: "savant-maven-bridge", version: "0.2.0", license: "Apachev2") {
   workflow {
     standard()
+  }
+
+  publishWorkflow {
+    subversion(repository: "http://svn.inversoft.org/savant")
   }
 
   dependencies {
@@ -69,13 +73,17 @@ target(name: "test", description: "Runs the project's tests", dependsOn: ["jar"]
   javaTestNG.test()
 }
 
+target(name: "doc", description: "Generate the project's JavaDoc", dependsOn: ["jar"]) {
+  java.document()
+}
+
 target(name: "int", description: "Releases a local integration build of the project", dependsOn: ["test"]) {
   dependency.integrate()
 }
 
 target(name: "bundle", description: "Generates the Tarball bundle", dependsOn: ["jar"]) {
   file.copy(to: "build/distributions/exploded/bin") {
-    fileSet(dir: "src/main/scripts")
+    fileSet(dir: "src/main/shell")
   }
 
   dependency.copy(to: "build/distributions/exploded/lib") {
@@ -83,8 +91,12 @@ target(name: "bundle", description: "Generates the Tarball bundle", dependsOn: [
     dependencies(group: "runtime", transitive: true, transitiveGroups: ["provided", "compile", "runtime"])
   }
 
+  file.copy(to: "build/distributions/exploded/lib") {
+    fileSet(dir: "build/jars", includePatterns: [/${project.name}-${project.version}.jar/])
+  }
+
   file.tar(file: "build/distributions/${project.name}-${project.version}.tar.gz", compress: true) {
-    tarFileSet(prefix: "savant-${project.version}", dir: "build/distributions/exploded")
+    tarFileSet(prefix: "${project.name}-${project.version}", dir: "build/distributions/exploded")
   }
 }
 
