@@ -87,7 +87,7 @@ public class SavantBridge {
     mavenArtifact.id = ask("Maven artifact id (i.e. commons-collections)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
     mavenArtifact.version = ask("Maven artifact version (i.e. 3.0.GA.1)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
 
-    buildMavenGraph(mavenArtifact, new HashSet<>());
+    buildMavenGraph(mavenArtifact, new HashSet<>(), new HashSet<>());
     downloadAndProcess(mavenArtifact);
   }
 
@@ -124,9 +124,13 @@ public class SavantBridge {
    *
    * @param mavenArtifact The maven artifact to fetch the graph for.
    */
-  private void buildMavenGraph(MavenArtifact mavenArtifact, Set<MavenArtifact> visitedArtifacts) {
-    if (visitedArtifacts.contains(mavenArtifact)) {
+  private void buildMavenGraph(MavenArtifact mavenArtifact, Set<MavenArtifact> cycleCheck, Set<MavenArtifact> visitedArtifacts) {
+    if (cycleCheck.contains(mavenArtifact)) {
       throw new RuntimeException("The Maven artifact you are trying to convert contains a cycle in its dependencies. The cycle is for the artifact [" + mavenArtifact + "]. Cycles are impossible in the real world, so it seems as though someone has jimmied the POM.");
+    }
+
+    if (visitedArtifacts.contains(mavenArtifact)) {
+      return;
     }
 
     makeSavantArtifact(mavenArtifact);
@@ -175,7 +179,7 @@ public class SavantBridge {
       if (dependency.version == null) {
         dependency.version = pom.resolveDependencyVersion(dependency);
         if (dependency.version == null) {
-          throw new RuntimeException("Unable to determine version for dependency [" + dependency + "]");
+          throw new RuntimeException("Unable to determine version for dependency [" + dependency + "]. Maven allows this, Savant does not.");
         }
       }
     });
@@ -187,19 +191,18 @@ public class SavantBridge {
 
     // Ask which dependencies to include in the AMD
     mavenArtifact.dependencies.removeIf((dependency) -> {
-      if (dependency.optional) {
-        return true;
-      }
-
-      String includeString = ask("Include [" + dependency + "] in the Savant AMD file (y/n) ", "y", "Invalid response (y/n)",
-          (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n")));
+      String includeString = ask("Include [" + dependency + "] in the Savant AMD file ([y]es/[n]o/[o]ptional) ", "y", "Invalid response (y/n/o)",
+          (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n") || response.equals("o")));
+      dependency.optional = includeString.equals("o");
       return includeString.equals("n");
     });
 
-    // Traverse graph
+    // Mark the maven artifact as visited and then traverse graph. After the graph has been traversed, remove the artifact
+    // from the visited list because that list is only used to check for cycles
+    cycleCheck.add(mavenArtifact);
     visitedArtifacts.add(mavenArtifact);
-    mavenArtifact.dependencies.forEach((dependency) -> buildMavenGraph(dependency, visitedArtifacts));
-    visitedArtifacts.remove(mavenArtifact);
+    mavenArtifact.dependencies.forEach((dependency) -> buildMavenGraph(dependency, cycleCheck, visitedArtifacts));
+    cycleCheck.remove(mavenArtifact);
   }
 
   private String replaceProperties(String value, Map<String, String> properties) {
@@ -221,15 +224,15 @@ public class SavantBridge {
     System.out.println("---------------------------------------------------------------------------------------------------------");
 
     String savantGroup = groupMappings.map(mavenArtifact.group);
-    if (!savantGroup.contains(".")) {
+    if (!savantGroup.equals(mavenArtifact.group)) {
+      System.out.println("Mapped Maven group [" + mavenArtifact.group + "] to Savant group [" + savantGroup + "]");
+    } else if (!savantGroup.contains(".")) {
       savantGroup = ask("That group looks weaksauce. Enter the group to use with Savant", mavenArtifact.group, null, null);
 
       // Store the mapping if they changed the group
       if (!mavenArtifact.group.equals(savantGroup)) {
         groupMappings.add(mavenArtifact.group, savantGroup);
       }
-    } else {
-      savantGroup = mavenArtifact.group;
     }
 
     Version savantVersion = getSemanticVersion(mavenArtifact.version);

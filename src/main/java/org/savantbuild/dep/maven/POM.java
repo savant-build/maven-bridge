@@ -47,10 +47,16 @@ public class POM {
 
   public Map<String, String> properties = new HashMap<>();
 
+  public String version;
+
   public POM(Path file) throws RuntimeException {
     SAXBuilder builder = new SAXBuilder();
     try {
       Element pomElement = builder.build(file.toFile()).getRootElement();
+      version = pomElement.getChildText("version", pomElement.getNamespace());
+      if (version != null) {
+        properties.put("project.version", version);
+      }
 
       // Grab the parent info
       Element parent = pomElement.getChild("parent", pomElement.getNamespace());
@@ -108,9 +114,10 @@ public class POM {
       artifact.scope = "compile";
     }
 
-    if (element.getChildren("exclusions", element.getNamespace()).size() > 0) {
+    List<Element> exclusions = element.getChildren("exclusions", element.getNamespace());
+    if (exclusions.size() > 0) {
       System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!! WARNING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      System.out.println("This Maven artifact has a dependency [" + artifact + "] with exclusions.");
+      System.out.println("This Maven artifact has a dependency [" + artifact + "] with exclusions " + exclusions);
       System.out.println("This indicates that the artifact [" + artifact + "] declared a bad dependency or declared an optional dependency as required.");
       System.out.println("There isn't much we can do here since Savant doesn't allow exclusions because they should not occur when dependencies are listed and configured correctly.");
       System.out.println();

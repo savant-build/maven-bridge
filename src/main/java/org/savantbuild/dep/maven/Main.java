@@ -38,7 +38,7 @@ public class Main {
     }
 
     boolean debug = args.length == 2 && args[0].equals("--debug");
-    String directoryName = args.length == 1 ? args[0] : args[2];
+    String directoryName = args.length == 1 ? args[0] : args[1];
 
     // Get the working directory
     Path directory = Paths.get(directoryName);
