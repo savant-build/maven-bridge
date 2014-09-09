@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Inversoft Inc., All Rights Reserved
+ * Copyright (c) 2014, Inversoft Inc., All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,11 +31,11 @@ import java.util.function.Predicate;
 
 import org.apache.commons.lang.StringUtils;
 import org.savantbuild.dep.DefaultDependencyService;
-import org.savantbuild.dep.domain.Artifact;
 import org.savantbuild.dep.domain.ArtifactID;
 import org.savantbuild.dep.domain.ArtifactMetaData;
 import org.savantbuild.dep.domain.License;
 import org.savantbuild.dep.domain.Publication;
+import org.savantbuild.dep.domain.ReifiedArtifact;
 import org.savantbuild.dep.domain.Version;
 import org.savantbuild.dep.domain.VersionException;
 import org.savantbuild.dep.workflow.PublishWorkflow;
@@ -56,6 +56,8 @@ import static java.util.Arrays.asList;
 public class SavantBridge {
   private final CacheProcess cacheProcess;
 
+  private final boolean debug;
+
   private final GroupMappings groupMappings;
 
   private final BufferedReader input;
@@ -66,7 +68,7 @@ public class SavantBridge {
 
   private final DefaultDependencyService service;
 
-  private final boolean debug;
+  private boolean includeTestDependencies;
 
   public SavantBridge(Path directory, GroupMappings groupMappings, boolean debug) {
     this.input = new BufferedReader(new InputStreamReader(System.in, Charset.forName("UTF-8")));
@@ -82,6 +84,8 @@ public class SavantBridge {
   }
 
   public void run() {
+    includeTestDependencies = askYN("Include test dependencies");
+
     MavenArtifact mavenArtifact = new MavenArtifact();
     mavenArtifact.group = ask("Maven group (i.e. commons-collections)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
     mavenArtifact.id = ask("Maven artifact id (i.e. commons-collections)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
@@ -117,6 +121,23 @@ public class SavantBridge {
     } while (!valid);
 
     return answer;
+  }
+
+  private boolean askYN(String message) {
+    String answer;
+    boolean valid;
+    do {
+      System.out.printf(message + "?\n");
+      try {
+        answer = input.readLine();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+
+      valid = answer != null && (answer.equals("y") || answer.equals("n"));
+    } while (!valid);
+
+    return answer.equals("y");
   }
 
   /**
@@ -191,10 +212,31 @@ public class SavantBridge {
 
     // Ask which dependencies to include in the AMD
     mavenArtifact.dependencies.removeIf((dependency) -> {
-      String includeString = ask("Include [" + dependency + "] in the Savant AMD file ([y]es/[n]o/[o]ptional) ", "y", "Invalid response (y/n/o)",
-          (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n") || response.equals("o")));
-      dependency.optional = includeString.equals("o");
-      return includeString.equals("n");
+      // Remove test dependencies
+      if (!includeTestDependencies && dependency.scope.equalsIgnoreCase("test")) {
+        return true;
+      }
+
+      // Ask if they want to keep it
+      String includeString;
+      if (dependency.optional) {
+        includeString = ask("Include optional dependency [" + dependency + "] in scope [" + dependency.scope + "] in the Savant AMD file ([y]es/[n]o) ", "y", "Invalid response (y/n)",
+            (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n") || response.equals("o")));
+        dependency.optional = includeString.equals("o");
+      } else {
+        includeString = ask("Include dependency [" + dependency + "] in scope [" + dependency.scope + "] in the Savant AMD file ([y]es/[n]o/[o]ptional) ", "y", "Invalid response (y/n/o)",
+            (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n") || response.equals("o")));
+        dependency.optional = includeString.equals("o");
+      }
+
+      boolean include = includeString.equals("y");
+      if (include) {
+        dependency.scope = ask("Enter scope for dependency", dependency.scope, "Invalid response (compile, provided, runtime, test-compile, test-runtime)",
+            (response) -> StringUtils.isNotBlank(response) && (response.equals("compile") || response.equals("provided") ||
+                response.equals("runtime") || response.equals("test-compile") || response.equals("test-runtime")));
+      }
+
+      return !include;
     });
 
     // Mark the maven artifact as visited and then traverse graph. After the graph has been traversed, remove the artifact
@@ -203,42 +245,6 @@ public class SavantBridge {
     visitedArtifacts.add(mavenArtifact);
     mavenArtifact.dependencies.forEach((dependency) -> buildMavenGraph(dependency, cycleCheck, visitedArtifacts));
     cycleCheck.remove(mavenArtifact);
-  }
-
-  private String replaceProperties(String value, Map<String, String> properties) {
-    if (value == null) {
-      return null;
-    }
-
-    for (String key : properties.keySet()) {
-      value = value.replace("${" + key + "}", properties.get(key));
-    }
-
-    return value;
-  }
-
-  private void makeSavantArtifact(MavenArtifact mavenArtifact) {
-    System.out.println();
-    System.out.println("---------------------------------------------------------------------------------------------------------");
-    System.out.println("Converting Maven artifact [" + mavenArtifact + "] to a Savant Artifact");
-    System.out.println("---------------------------------------------------------------------------------------------------------");
-
-    String savantGroup = groupMappings.map(mavenArtifact.group);
-    if (!savantGroup.equals(mavenArtifact.group)) {
-      System.out.println("Mapped Maven group [" + mavenArtifact.group + "] to Savant group [" + savantGroup + "]");
-    } else if (!savantGroup.contains(".")) {
-      savantGroup = ask("That group looks weaksauce. Enter the group to use with Savant", mavenArtifact.group, null, null);
-
-      // Store the mapping if they changed the group
-      if (!mavenArtifact.group.equals(savantGroup)) {
-        groupMappings.add(mavenArtifact.group, savantGroup);
-      }
-    }
-
-    Version savantVersion = getSemanticVersion(mavenArtifact.version);
-    License license = getLicense(mavenArtifact);
-
-    mavenArtifact.savantArtifact = new Artifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.id, (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, license);
   }
 
   private void downloadAndProcess(MavenArtifact mavenArtifact) {
@@ -346,5 +352,41 @@ public class SavantBridge {
     }
 
     return true;
+  }
+
+  private void makeSavantArtifact(MavenArtifact mavenArtifact) {
+    System.out.println();
+    System.out.println("---------------------------------------------------------------------------------------------------------");
+    System.out.println("Converting Maven artifact [" + mavenArtifact + "] to a Savant Artifact");
+    System.out.println("---------------------------------------------------------------------------------------------------------");
+
+    String savantGroup = groupMappings.map(mavenArtifact.group);
+    if (!savantGroup.equals(mavenArtifact.group)) {
+      System.out.println("Mapped Maven group [" + mavenArtifact.group + "] to Savant group [" + savantGroup + "]");
+    } else if (!savantGroup.contains(".")) {
+      savantGroup = ask("That group looks weaksauce. Enter the group to use with Savant", mavenArtifact.group, null, null);
+
+      // Store the mapping if they changed the group
+      if (!mavenArtifact.group.equals(savantGroup)) {
+        groupMappings.add(mavenArtifact.group, savantGroup);
+      }
+    }
+
+    Version savantVersion = getSemanticVersion(mavenArtifact.version);
+    License license = getLicense(mavenArtifact);
+
+    mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.id, (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, license);
+  }
+
+  private String replaceProperties(String value, Map<String, String> properties) {
+    if (value == null) {
+      return null;
+    }
+
+    for (String key : properties.keySet()) {
+      value = value.replace("${" + key + "}", properties.get(key));
+    }
+
+    return value;
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Inversoft Inc., All Rights Reserved
+ * Copyright (c) 2014, Inversoft Inc., All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ import java.util.List;
 
 import org.savantbuild.dep.domain.Artifact;
 import org.savantbuild.dep.domain.Dependencies;
-import org.savantbuild.dep.domain.Dependency;
 import org.savantbuild.dep.domain.DependencyGroup;
+import org.savantbuild.dep.domain.ReifiedArtifact;
 
 /**
  * Maven artifact.
@@ -31,15 +31,13 @@ import org.savantbuild.dep.domain.DependencyGroup;
 public class MavenArtifact {
   public List<MavenArtifact> dependencies = new ArrayList<>();
 
-  public List<MavenArtifact> exclusions = new ArrayList<>();
-
   public String group;
 
   public String id;
 
   public boolean optional;
 
-  public Artifact savantArtifact;
+  public ReifiedArtifact savantArtifact;
 
   public String scope;
 
@@ -71,15 +69,6 @@ public class MavenArtifact {
         (version != null ? version.equals(that.version) : that.version == null);
   }
 
-  @Override
-  public int hashCode() {
-    int result = group.hashCode();
-    result = 31 * result + id.hashCode();
-    result = 31 * result + (type != null ? type.hashCode() : 0);
-    result = 31 * result + (version != null ? version.hashCode() : 0);
-    return result;
-  }
-
   public String getMainFile() {
     return id + "-" + version + "." + (type == null ? "jar" : type);
   }
@@ -91,13 +80,18 @@ public class MavenArtifact {
   public Dependencies getSavantDependencies() {
     Dependencies savantDependencies = new Dependencies();
     dependencies.forEach((dependency) -> {
-      DependencyGroup savantDependencyGroup = savantDependencies.groups.get(dependency.scope);
-      if (savantDependencyGroup == null) {
-        savantDependencyGroup = new DependencyGroup(dependency.scope, true);
-        savantDependencies.groups.put(savantDependencyGroup.type, savantDependencyGroup);
+      String groupName = dependency.scope;
+      if (dependency.optional) {
+        groupName += "-optional";
       }
 
-      savantDependencyGroup.dependencies.add(new Dependency(dependency.savantArtifact.id, dependency.savantArtifact.version, dependency.optional));
+      DependencyGroup savantDependencyGroup = savantDependencies.groups.get(groupName);
+      if (savantDependencyGroup == null) {
+        savantDependencyGroup = new DependencyGroup(groupName, true);
+        savantDependencies.groups.put(savantDependencyGroup.name, savantDependencyGroup);
+      }
+
+      savantDependencyGroup.dependencies.add(new Artifact(dependency.savantArtifact.id, dependency.savantArtifact.version));
     });
 
     return savantDependencies;
@@ -105,6 +99,15 @@ public class MavenArtifact {
 
   public String getSourceFile() {
     return id + "-" + version + "-sources." + (type == null ? "jar" : type);
+  }
+
+  @Override
+  public int hashCode() {
+    int result = group.hashCode();
+    result = 31 * result + id.hashCode();
+    result = 31 * result + (type != null ? type.hashCode() : 0);
+    result = 31 * result + (version != null ? version.hashCode() : 0);
+    return result;
   }
 
   public String toString() {
