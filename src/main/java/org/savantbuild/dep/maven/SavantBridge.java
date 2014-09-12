@@ -150,7 +150,9 @@ public class SavantBridge {
       throw new RuntimeException("The Maven artifact you are trying to convert contains a cycle in its dependencies. The cycle is for the artifact [" + mavenArtifact + "]. Cycles are impossible in the real world, so it seems as though someone has jimmied the POM.");
     }
 
-    if (visitedArtifacts.contains(mavenArtifact)) {
+    MavenArtifact existing = visitedArtifacts.stream().filter(mavenArtifact::equals).findFirst().orElse(null);
+    if (existing != null) {
+      mavenArtifact.savantArtifact = existing.savantArtifact;
       return;
     }
 
@@ -184,7 +186,7 @@ public class SavantBridge {
       MavenArtifact parentArtifact = new MavenArtifact(current.parentGroup, current.parentId, current.parentVersion);
       pomFile = downloadItem(parentArtifact, parentArtifact.getPOM());
       current.parent = new POM(pomFile);
-      properties.putAll(current.properties);
+      current.parent.properties.forEach(properties::putIfAbsent);
       mavenArtifact.dependencies.addAll(current.dependencies);
       current = current.parent;
     }
@@ -193,7 +195,6 @@ public class SavantBridge {
     mavenArtifact.dependencies.forEach((dependency) -> {
       dependency.group = replaceProperties(dependency.group, properties);
       dependency.id = replaceProperties(dependency.id, properties);
-      dependency.version = replaceProperties(dependency.version, properties);
       dependency.type = replaceProperties(dependency.type, properties);
       dependency.scope = replaceProperties(dependency.scope, properties);
 
@@ -203,6 +204,8 @@ public class SavantBridge {
           throw new RuntimeException("Unable to determine version for dependency [" + dependency + "]. Maven allows this, Savant does not.");
         }
       }
+
+      dependency.version = replaceProperties(dependency.version, properties);
     });
 
     // Remove dups
@@ -218,22 +221,13 @@ public class SavantBridge {
       }
 
       // Ask if they want to keep it
-      String includeString;
-      if (dependency.optional) {
-        includeString = ask("Include optional dependency [" + dependency + "] in scope [" + dependency.scope + "] in the Savant AMD file ([y]es/[n]o) ", "y", "Invalid response (y/n)",
-            (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n") || response.equals("o")));
-        dependency.optional = includeString.equals("o");
-      } else {
-        includeString = ask("Include dependency [" + dependency + "] in scope [" + dependency.scope + "] in the Savant AMD file ([y]es/[n]o/[o]ptional) ", "y", "Invalid response (y/n/o)",
-            (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n") || response.equals("o")));
-        dependency.optional = includeString.equals("o");
-      }
-
+      String includeString = ask("Include dependency [" + dependency + "] in scope [" + dependency.scope + "] in the Savant AMD file ([y]es/[n]o) ", "y", "Invalid response",
+          (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n")));
       boolean include = includeString.equals("y");
       if (include) {
-        dependency.scope = ask("Enter scope for dependency", dependency.scope, "Invalid response (compile, provided, runtime, test-compile, test-runtime)",
-            (response) -> StringUtils.isNotBlank(response) && (response.equals("compile") || response.equals("provided") ||
-                response.equals("runtime") || response.equals("test-compile") || response.equals("test-runtime")));
+        dependency.scope = ask("Enter scope for dependency (provided, compile, compile-optional, runtime, runtime-optional, test-compile, test-runtime)", dependency.scope, "Invalid response",
+            (response) -> StringUtils.isNotBlank(response) && (response.equals("provided") || response.equals("compile") || response.equals("compile-optional") ||
+                response.equals("runtime") || response.equals("runtime-optional") || response.equals("test-compile") || response.equals("test-runtime")));
       }
 
       return !include;
@@ -260,8 +254,10 @@ public class SavantBridge {
       if (debug) {
         try {
           Path temp = ArtifactTools.generateXML(amd);
-          System.out.println("Writing out AMD file");
-          System.out.println(new String(Files.readAllBytes(temp)));
+          if (debug) {
+            System.out.println("Writing out AMD file");
+            System.out.println(new String(Files.readAllBytes(temp)));
+          }
         } catch (IOException e) {
           // never
         }

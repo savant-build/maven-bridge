@@ -57,6 +57,18 @@ public class POM {
       if (version != null) {
         properties.put("project.version", version);
       }
+      if (pomElement.getChildText("groupId", pomElement.getNamespace()) != null) {
+        properties.put("project.groupId", pomElement.getChildText("groupId", pomElement.getNamespace()));
+      }
+      if (pomElement.getChildText("artifactId", pomElement.getNamespace()) != null) {
+        properties.put("project.artifactId", pomElement.getChildText("artifactId", pomElement.getNamespace()));
+      }
+      if (pomElement.getChildText("name", pomElement.getNamespace()) != null) {
+        properties.put("project.name", pomElement.getChildText("name", pomElement.getNamespace()));
+      }
+      if (pomElement.getChildText("packaging", pomElement.getNamespace()) != null) {
+        properties.put("project.packaging", pomElement.getChildText("packaging", pomElement.getNamespace()));
+      }
 
       // Grab the parent info
       Element parent = pomElement.getChild("parent", pomElement.getNamespace());
@@ -70,7 +82,7 @@ public class POM {
       Element properties = pomElement.getChild("properties", pomElement.getNamespace());
       if (properties != null) {
         properties.getChildren().forEach((element) -> this.properties.put(element.getName(), element.getTextTrim()));
-      }
+    }
 
       // Grab the dependencies (top-level)
       Element dependencies = pomElement.getChild("dependencies", pomElement.getNamespace());
@@ -112,6 +124,9 @@ public class POM {
     artifact.scope = element.getChildText("scope", element.getNamespace());
     if (artifact.scope == null) {
       artifact.scope = "compile";
+    }
+    if (artifact.optional) {
+      artifact.scope += "-optional";
     }
 
     List<Element> exclusions = element.getChildren("exclusions", element.getNamespace());

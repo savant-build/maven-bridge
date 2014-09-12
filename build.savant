@@ -25,13 +25,13 @@ project(group: "org.savantbuild", name: "savant-maven-bridge", version: "0.2.0",
   }
 
   dependencies {
-    group(type: "compile") {
+    group(name: "compile") {
       dependency(id: "org.apache.commons:commons-lang:2.6.0")
       dependency(id: "org.jdom:jdom:2.0.5")
       dependency(id: "org.savantbuild:savant-dependency-management:${savantVersion}")
       dependency(id: "org.savantbuild:savant-utils:${savantVersion}")
     }
-    group(type: "test-compile", export: false) {
+    group(name: "test-compile", export: false) {
       dependency(id: "org.testng:testng:6.8.7")
     }
   }

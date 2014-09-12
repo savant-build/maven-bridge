@@ -81,17 +81,13 @@ public class MavenArtifact {
     Dependencies savantDependencies = new Dependencies();
     dependencies.forEach((dependency) -> {
       String groupName = dependency.scope;
-      if (dependency.optional) {
-        groupName += "-optional";
-      }
-
       DependencyGroup savantDependencyGroup = savantDependencies.groups.get(groupName);
       if (savantDependencyGroup == null) {
         savantDependencyGroup = new DependencyGroup(groupName, true);
-        savantDependencies.groups.put(savantDependencyGroup.name, savantDependencyGroup);
+        savantDependencies.groups.put(groupName, savantDependencyGroup);
       }
 
-      savantDependencyGroup.dependencies.add(new Artifact(dependency.savantArtifact.id, dependency.savantArtifact.version));
+      savantDependencyGroup.dependencies.add(new Artifact(dependency.savantArtifact.id, dependency.savantArtifact.version, false));
     });
 
     return savantDependencies;
