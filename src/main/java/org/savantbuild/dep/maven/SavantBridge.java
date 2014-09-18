@@ -62,7 +62,7 @@ public class SavantBridge {
 
   private final BufferedReader input;
 
-  private final Map<String, License> licenseMappings = new HashMap<>();
+  private final Map<String, Map<License, String>> licenseMappings = new HashMap<>();
 
   private final PublishWorkflow publishWorkflow;
 
@@ -250,18 +250,17 @@ public class SavantBridge {
       }
 
       Path sourceFile = downloadItem(mavenArtifact, mavenArtifact.getSourceFile());
-      ArtifactMetaData amd = new ArtifactMetaData(mavenArtifact.getSavantDependencies(), mavenArtifact.savantArtifact.license);
+      ArtifactMetaData amd = new ArtifactMetaData(mavenArtifact.getSavantDependencies(), mavenArtifact.savantArtifact.licenses);
       if (debug) {
         try {
           Path temp = ArtifactTools.generateXML(amd);
-          if (debug) {
-            System.out.println("Writing out AMD file");
-            System.out.println(new String(Files.readAllBytes(temp)));
-          }
+          System.out.println("Writing out AMD file");
+          System.out.println(new String(Files.readAllBytes(temp)));
         } catch (IOException e) {
           // never
         }
       }
+
       Publication publication = new Publication(mavenArtifact.savantArtifact, amd, file, sourceFile);
       service.publish(publication, publishWorkflow);
     }
@@ -281,25 +280,32 @@ public class SavantBridge {
     }
   }
 
-  private License getLicense(MavenArtifact mavenArtifact) {
-    License license = licenseMappings.get(mavenArtifact.group + ":" + mavenArtifact.id);
-    if (license == null) {
-      String licenseName = ask("License for this artifact (" + asList(License.values()) + ")", License.Apachev2.toString(), "Invalid license. Please re-enter.\n",
+  private Map<License, String> getLicenses(MavenArtifact mavenArtifact) {
+    Map<License, String> licenses = licenseMappings.get(mavenArtifact.group + ":" + mavenArtifact.id);
+    if (licenses == null) {
+      String licenseNames = ask("License(s) for this artifact - comma-separated list (" + asList(License.values()) + ")", License.ApacheV2_0.toString(), "Invalid license. Please re-enter.\n",
           (answer) -> {
-            try {
-              License.valueOf(answer);
-              return true;
-            } catch (IllegalArgumentException e) {
-              // Bad license
-              return false;
+            String[] parts = answer.split("\\W*,\\W*");
+            for (String part : parts) {
+              try {
+                License.valueOf(part);
+              } catch (IllegalArgumentException e) {
+                // Bad license
+                return false;
+              }
             }
+            return true;
           });
 
-      license = License.valueOf(licenseName);
-      licenseMappings.put(mavenArtifact.group + ":" + mavenArtifact.id, license);
+      licenses = new HashMap<>();
+      String[] parts = licenseNames.split("\\W*,\\W*");
+      for (String part : parts) {
+        licenses.put(License.valueOf(part), null);
+      }
+      licenseMappings.put(mavenArtifact.group + ":" + mavenArtifact.id, licenses);
     }
 
-    return license;
+    return licenses;
   }
 
   private Version getSemanticVersion(String version) {
@@ -369,9 +375,9 @@ public class SavantBridge {
     }
 
     Version savantVersion = getSemanticVersion(mavenArtifact.version);
-    License license = getLicense(mavenArtifact);
+    Map<License, String> licenses = getLicenses(mavenArtifact);
 
-    mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.id, (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, license);
+    mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.id, (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
   }
 
   private String replaceProperties(String value, Map<String, String> properties) {
