@@ -123,6 +123,31 @@ public class SavantBridge {
     return answer;
   }
 
+  private String askMultiLine(String message) {
+    System.out.printf(message);
+
+    String text = null;
+    while (text == null) {
+      StringBuilder build = new StringBuilder();
+      String line;
+      try {
+        while ((line = input.readLine()) != null) {
+          build.append(line).append("\n");
+        }
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+
+      text = build.toString().trim();
+      if (text.length() == 0) {
+        System.out.printf("Invalid license text. Please re-enter\n\n");
+        text = null;
+      }
+    }
+
+    return text;
+  }
+
   private boolean askYN(String message) {
     String answer;
     boolean valid;
@@ -300,8 +325,17 @@ public class SavantBridge {
       licenses = new HashMap<>();
       String[] parts = licenseNames.split("\\W*,\\W*");
       for (String part : parts) {
-        licenses.put(License.valueOf(part), null);
+        License license = License.valueOf(part);
+        String text = null;
+        if (license.requiresText) {
+          text = askMultiLine("The license type [" + license + "] requires license text. Enter it here and terminate your entry with the ctrl-d.\n");
+        }
+
+        licenses.put(license, text);
       }
+
+      licenses.keySet().forEach((license) -> {
+      });
       licenseMappings.put(mavenArtifact.group + ":" + mavenArtifact.id, licenses);
     }
 
@@ -335,7 +369,7 @@ public class SavantBridge {
           throw new RuntimeException(e);
         }
 
-        if (isSemantic(version)) {
+        if (version != null && version.length() > 0 && isSemantic(version)) {
           keep = true;
         } else {
           System.out.println("Invalid semantic version. Please re-enter.");
