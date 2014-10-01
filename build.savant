@@ -13,7 +13,7 @@
  * either express or implied. See the License for the specific
  * language governing permissions and limitations under the License.
  */
-savantVersion = "0.2.0-{integration}"
+savantVersion = "0.2.0"
 
 project(group: "org.savantbuild", name: "savant-maven-bridge", version: "0.2.0", licenses: ["ApacheV2_0"]) {
   workflow {
@@ -37,7 +37,9 @@ project(group: "org.savantbuild", name: "savant-maven-bridge", version: "0.2.0",
   }
 
   publications {
-    standard()
+    main {
+      publication(name: project.name, type: "tar.gz", file: "build/distributions/${project.name}-${project.version}.tar.gz")
+    }
   }
 }
 
@@ -77,7 +79,7 @@ target(name: "doc", description: "Generate the project's JavaDoc", dependsOn: ["
   java.document()
 }
 
-target(name: "int", description: "Releases a local integration build of the project", dependsOn: ["test"]) {
+target(name: "int", description: "Releases a local integration build of the project", dependsOn: ["test", "bundle"]) {
   dependency.integrate()
 }
 
