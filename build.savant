@@ -44,12 +44,12 @@ project(group: "org.savantbuild", name: "savant-maven-bridge", version: "0.2.1",
 }
 
 // Plugins
-dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:${savantVersion}")
-file = loadPlugin(id: "org.savantbuild.plugin:file:${savantVersion}")
-java = loadPlugin(id: "org.savantbuild.plugin:java:${savantVersion}")
-javaTestNG = loadPlugin(id: "org.savantbuild.plugin:java-testng:${savantVersion}")
-idea = loadPlugin(id: "org.savantbuild.plugin:idea:${savantVersion}")
-release = loadPlugin(id: "org.savantbuild.plugin:release-git:${savantVersion}")
+dependency = loadPlugin(id: "org.savantbuild.plugin:dependency:0.3.1")
+file = loadPlugin(id: "org.savantbuild.plugin:file:0.3.1")
+java = loadPlugin(id: "org.savantbuild.plugin:java:0.3.1")
+javaTestNG = loadPlugin(id: "org.savantbuild.plugin:java-testng:0.3.1")
+idea = loadPlugin(id: "org.savantbuild.plugin:idea:0.3.2")
+release = loadPlugin(id: "org.savantbuild.plugin:release-git:0.3.4")
 
 // Plugin settings
 java.settings.javaVersion = "1.8"
