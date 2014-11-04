@@ -226,7 +226,9 @@ public class SavantBridge {
       if (dependency.version == null) {
         dependency.version = pom.resolveDependencyVersion(dependency);
         if (dependency.version == null) {
-          throw new RuntimeException("Unable to determine version for dependency [" + dependency + "]. Maven allows this, Savant does not.");
+          dependency.version = ask("Unable to determine version for dependency [" + dependency + "]. Maven allows this, " +
+                  "Savant does not. You must provide the correct version of the Maven artifact to use.",
+              null, "You must supply a version", StringUtils::isNotBlank);
         }
       }
 
