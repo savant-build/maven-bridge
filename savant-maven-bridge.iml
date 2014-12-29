@@ -12,7 +12,6 @@
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="jdk" jdkName="1.8" jdkType="JavaSDK" />
-    <orderEntry type="library" name="Groovy 2.2" level="application" />
     <orderEntry type="module-library">
       <library>
         <CLASSES>
@@ -37,17 +36,6 @@
     </orderEntry>
     <orderEntry type="module" module-name="savant-dependency-management" />
     <orderEntry type="module" module-name="savant-utils" />
-    <orderEntry type="module-library" scope="RUNTIME">
-      <library>
-        <CLASSES>
-          <root url="jar://$USER_HOME$/.savant/cache/ch/ethz/ganymed/ganymed-ssh2/261.0.0/ganymed-ssh2-261.0.0.jar!/" />
-        </CLASSES>
-        <JAVADOC />
-        <SOURCES>
-          <root url="jar://$USER_HOME$/.savant/cache/ch/ethz/ganymed/ganymed-ssh2/261.0.0/ganymed-ssh2-261.0.0-src.jar!/" />
-        </SOURCES>
-      </library>
-    </orderEntry>
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
@@ -56,6 +44,28 @@
         <JAVADOC />
         <SOURCES>
           <root url="jar://$USER_HOME$/.savant/cache/org/testng/testng/6.8.7/testng-6.8.7-src.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library" scope="TEST">
+      <library>
+        <CLASSES>
+          <root url="jar://$USER_HOME$/.savant/cache/com/beust/jcommander/1.27.0/jcommander-1.27.0.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$USER_HOME$/.savant/cache/com/beust/jcommander/1.27.0/jcommander-1.27.0-src.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library" scope="RUNTIME">
+      <library>
+        <CLASSES>
+          <root url="jar://$USER_HOME$/.savant/cache/ch/ethz/ganymed/ganymed-ssh2/261.0.0/ganymed-ssh2-261.0.0.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$USER_HOME$/.savant/cache/ch/ethz/ganymed/ganymed-ssh2/261.0.0/ganymed-ssh2-261.0.0-src.jar!/" />
         </SOURCES>
       </library>
     </orderEntry>
