@@ -185,6 +185,7 @@ public class SavantBridge {
 
     // If the artifact has already been fetched, skip it
     if (cacheProcess.fetch(mavenArtifact.savantArtifact, mavenArtifact.savantArtifact.getArtifactFile(), null) != null) {
+      System.out.println("Skipping artifact [" + mavenArtifact.savantArtifact + "] because it already exists in the repository.");
       return;
     }
 
