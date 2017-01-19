@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Inversoft Inc., All Rights Reserved
+ * Copyright (c) 2014-2017, Inversoft Inc., All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -84,7 +85,9 @@ public class SavantBridge {
   }
 
   public void run() {
-    includeTestDependencies = askYN("Include test dependencies");
+    System.out.println("Prompt Enabled [" + prompt() + "]");
+
+    includeTestDependencies = ask("Include test dependencies?", "n", "Invalid Response", (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n"))).equals("y");
 
     MavenArtifact mavenArtifact = new MavenArtifact();
     mavenArtifact.group = ask("Maven group (i.e. commons-collections)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
@@ -189,7 +192,27 @@ public class SavantBridge {
       return;
     }
 
-    Path pomFile = downloadItem(mavenArtifact, mavenArtifact.getPOM());
+    boolean tryToDownload = true;
+    Path pomFile = null;
+    // Give the user another change to correct the version before we explode.
+    while (tryToDownload) {
+      pomFile = downloadItem(mavenArtifact, mavenArtifact.getPOM());
+      if (pomFile == null) {
+        System.out.println("Invalid Maven artifact [" + mavenArtifact + "]. It doesn't appear to exist in the Maven repository. Is it correct?");
+        String tryAgainAnswer = ask("Do you want to try again? Verify the version is correct, the version should be as it is defined in the Maven repository.", "y", "Invalid response",
+            (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n")));
+
+        tryToDownload = tryAgainAnswer.equals("y");
+        if (tryToDownload) {
+          mavenArtifact.version = ask("Enter the corrected artifact version", mavenArtifact.version, "Invalid response", StringUtils::isNotBlank);
+          // update the savant artifact with the new version
+          makeSavantArtifact(mavenArtifact);
+        }
+      } else {
+        tryToDownload = false;
+      }
+    }
+
     if (pomFile == null) {
       throw new RuntimeException("Invalid Maven artifact [" + mavenArtifact + "]. It doesn't appear to exist in the Maven repository. Is it correct?");
     }
@@ -217,6 +240,9 @@ public class SavantBridge {
       current = current.parent;
     }
 
+    // Remove Test Dependencies if we're not using them before we check versions.
+    mavenArtifact.dependencies.removeIf(dependency -> !includeTestDependencies && dependency.scope.equalsIgnoreCase("test"));
+
     // Replace the properties and resolve artifact versions from parent POMs
     mavenArtifact.dependencies.forEach((dependency) -> {
       dependency.group = replaceProperties(dependency.group, properties);
@@ -224,41 +250,51 @@ public class SavantBridge {
       dependency.type = replaceProperties(dependency.type, properties);
       dependency.scope = replaceProperties(dependency.scope, properties);
 
+      if (dependency.version != null) {
+        dependency.version = replaceProperties(dependency.version, properties);
+      }
+
       if (dependency.version == null) {
+        // Attempt to resolve it
         dependency.version = pom.resolveDependencyVersion(dependency);
+
+        // Version ok? call replaceProperties
+        if (dependency.version != null) {
+          dependency.version = replaceProperties(dependency.version, properties);
+        }
+
+        // If we're still null, ask for it, maybe the human is smarter than me...
         if (dependency.version == null) {
           dependency.version = ask("Unable to determine version for dependency [" + dependency + "]. Maven allows this, " +
                   "Savant does not. You must provide the correct version of the Maven artifact to use.",
               null, "You must supply a version", StringUtils::isNotBlank);
         }
       }
-
-      dependency.version = replaceProperties(dependency.version, properties);
     });
 
-    // Remove dups
+    // Remove duplicates
     Set<MavenArtifact> dependencies = new HashSet<>(mavenArtifact.dependencies);
     mavenArtifact.dependencies.clear();
     mavenArtifact.dependencies.addAll(dependencies);
 
     // Ask which dependencies to include in the AMD
     mavenArtifact.dependencies.removeIf((dependency) -> {
-      // Remove test dependencies
-      if (!includeTestDependencies && dependency.scope.equalsIgnoreCase("test")) {
-        return true;
+      if (prompt()) {
+        // Ask if they want to keep it
+        String includeString = ask("Include dependency [" + dependency + "] in scope [" + dependency.scope + "] in the Savant AMD file ([y]es/[n]o) ", "y", "Invalid response",
+            (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n")));
+        boolean include = includeString.equals("y");
+        if (include) {
+          dependency.scope = ask("  Enter scope for dependency (provided, compile, compile-optional, runtime, runtime-optional, test-compile, test-runtime). Default: ", dependency.scope, "Invalid response",
+              (response) -> StringUtils.isNotBlank(response) && (response.equals("provided") || response.equals("compile") || response.equals("compile-optional") ||
+                  response.equals("runtime") || response.equals("runtime-optional") || response.equals("test-compile") || response.equals("test-runtime")));
+        }
+
+        return !include;
+      } else {
+        return false;
       }
 
-      // Ask if they want to keep it
-      String includeString = ask("Include dependency [" + dependency + "] in scope [" + dependency.scope + "] in the Savant AMD file ([y]es/[n]o) ", "y", "Invalid response",
-          (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n")));
-      boolean include = includeString.equals("y");
-      if (include) {
-        dependency.scope = ask("Enter scope for dependency (provided, compile, compile-optional, runtime, runtime-optional, test-compile, test-runtime)", dependency.scope, "Invalid response",
-            (response) -> StringUtils.isNotBlank(response) && (response.equals("provided") || response.equals("compile") || response.equals("compile-optional") ||
-                response.equals("runtime") || response.equals("runtime-optional") || response.equals("test-compile") || response.equals("test-runtime")));
-      }
-
-      return !include;
     });
 
     // Mark the maven artifact as visited and then traverse graph. After the graph has been traversed, remove the artifact
@@ -299,9 +335,15 @@ public class SavantBridge {
   private Path downloadItem(MavenArtifact mavenArtifact, String item) {
     try {
       URI md5URI = NetTools.build("http://repo1.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item + ".md5");
+      if (debug) {
+        System.out.println(" " + md5URI.toString());
+      }
       Path md5File = NetTools.downloadToPath(md5URI, null, null, null);
       MD5 md5 = MD5.load(md5File);
       URI uri = NetTools.build("http://repo1.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item);
+      if (debug) {
+        System.out.println(" " + uri.toString());
+      }
       return NetTools.downloadToPath(uri, null, null, md5);
     } catch (URISyntaxException | IOException e) {
       throw new RuntimeException("ERROR", e);
@@ -348,15 +390,20 @@ public class SavantBridge {
   private Version getSemanticVersion(String version) {
     boolean keep = false;
     if (isSemantic(version)) {
-      System.out.printf("The version [%s] appears to be semantic. Does you want to keep it [y]?\n", version);
-      String answer;
-      try {
-        answer = input.readLine();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
 
-      if (answer.equals("") || answer.equals("y")) {
+      if (prompt()) {
+        System.out.printf("The version [%s] appears to be semantic. Does you want to keep it [y]?\n", version);
+        String answer;
+        try {
+          answer = input.readLine();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+
+        if (answer.equals("") || answer.equals("y")) {
+          keep = true;
+        }
+      } else {
         keep = true;
       }
     } else {
@@ -412,9 +459,24 @@ public class SavantBridge {
     }
 
     Version savantVersion = getSemanticVersion(mavenArtifact.version);
-    Map<License, String> licenses = getLicenses(mavenArtifact);
 
+    // Don't ask for the licenses if we already have it
+    Map<License, String> licenses = Collections.emptyMap();
     mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.id, (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
+
+    if (cacheProcess.fetch(mavenArtifact.savantArtifact, mavenArtifact.savantArtifact.getArtifactFile(), null) == null) {
+      licenses = getLicenses(mavenArtifact);
+      mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.id, (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
+    }
+  }
+
+  private boolean prompt() {
+    String prompt = System.getenv("SAVANT_BRIDGE_PROMPT");
+    if (prompt == null || prompt.equals("true")) {
+      return true;
+    } else {
+      return false;
+    }
   }
 
   private String replaceProperties(String value, Map<String, String> properties) {

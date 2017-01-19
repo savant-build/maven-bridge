@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Inversoft Inc., All Rights Reserved
+ * Copyright (c) 2013-2017, Inversoft Inc., All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,11 @@
 package org.savantbuild.dep.maven;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -52,16 +56,27 @@ public class POM {
   public POM(Path file) throws RuntimeException {
     SAXBuilder builder = new SAXBuilder();
     try {
+      removeInvalidCharactersInPom(file);
+
       Element pomElement = builder.build(file.toFile()).getRootElement();
       version = pomElement.getChildText("version", pomElement.getNamespace());
       if (version != null) {
         properties.put("project.version", version);
+        // 'pom' and no prefix are deprecated in favor of 'project' but they still exist in the wild.
+        properties.put("pom.version", properties.get("project.version"));
+        properties.put("version", properties.get("project.version"));
       }
       if (pomElement.getChildText("groupId", pomElement.getNamespace()) != null) {
         properties.put("project.groupId", pomElement.getChildText("groupId", pomElement.getNamespace()));
+        // 'pom' and no prefix are deprecated in favor of 'project' but they still exist in the wild.
+        properties.put("pom.groupId", properties.get("project.groupId"));
+        properties.put("groupId", properties.get("project.groupId"));
       }
       if (pomElement.getChildText("artifactId", pomElement.getNamespace()) != null) {
         properties.put("project.artifactId", pomElement.getChildText("artifactId", pomElement.getNamespace()));
+        // 'pom' and no prefix are deprecated in favor of 'project' but they still exist in the wild.
+        properties.put("pom.artifactId", properties.get("project.artifactId"));
+        properties.put("artifactId", properties.get("project.artifactId"));
       }
       if (pomElement.getChildText("name", pomElement.getNamespace()) != null) {
         properties.put("project.name", pomElement.getChildText("name", pomElement.getNamespace()));
@@ -82,7 +97,7 @@ public class POM {
       Element properties = pomElement.getChild("properties", pomElement.getNamespace());
       if (properties != null) {
         properties.getChildren().forEach((element) -> this.properties.put(element.getName(), element.getTextTrim()));
-    }
+      }
 
       // Grab the dependencies (top-level)
       Element dependencies = pomElement.getChild("dependencies", pomElement.getNamespace());
@@ -97,6 +112,7 @@ public class POM {
         depMgntDeps.getChildren().forEach((element) -> this.dependenciesDefinitions.add(parseArtifact(element)));
       }
     } catch (JDOMException | IOException e) {
+      writeOutBadPom(file);
       throw new RuntimeException(e);
     }
   }
@@ -129,19 +145,50 @@ public class POM {
       artifact.scope += "-optional";
     }
 
-    List<Element> exclusions = element.getChildren("exclusions", element.getNamespace());
-    if (exclusions.size() > 0) {
-      System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!! WARNING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      System.out.println("This Maven artifact has a dependency [" + artifact + "] with exclusions " + exclusions);
-      System.out.println("This indicates that the artifact [" + artifact + "] declared a bad dependency or declared an optional dependency as required.");
-      System.out.println("There isn't much we can do here since Savant doesn't allow exclusions because they should not occur when dependencies are listed and configured correctly.");
-      System.out.println();
+    if (prompt()) {
+      List<Element> exclusions = element.getChildren("exclusions", element.getNamespace());
+      if (exclusions.size() > 0) {
+        System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!! WARNING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        System.out.println("This Maven artifact has a dependency [" + artifact + "] with exclusions " + exclusions);
+        System.out.println("This indicates that the artifact [" + artifact + "] declared a bad dependency or declared an optional dependency as required.");
+        System.out.println("There isn't much we can do here since Savant doesn't allow exclusions because they should not occur when dependencies are listed and configured correctly.");
+        System.out.println();
+      }
     }
 
     return artifact;
   }
 
+  private boolean prompt() {
+    String prompt = System.getenv("SAVANT_BRIDGE_PROMPT");
+    if (prompt == null || prompt.equals("true")) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  private void removeInvalidCharactersInPom(Path file) {
+    try {
+      String pomString = new String(Files.readAllBytes(file), "UTF-8");
+      if (pomString.contains("&oslash;")) {
+        System.out.println("Found and replaced [&oslash;] with [O] to keep the parser from exploding.");
+        Files.write(file, pomString.replace("&oslash;", "O").getBytes("UTF-8"), StandardOpenOption.TRUNCATE_EXISTING);
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   private boolean toBoolean(String value) {
     return value != null && Boolean.parseBoolean(value);
+  }
+
+  private void writeOutBadPom(Path file) {
+    System.out.println("Bad POM, failed to parse. I copied it to /tmp/invalid_pom if you want to take a and see what is fookered.");
+    try {
+      Files.copy(file, Paths.get("/tmp/invalid_pom"), StandardCopyOption.REPLACE_EXISTING);
+    } catch (IOException ignore) {
+    }
   }
 }
