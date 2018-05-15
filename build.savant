@@ -15,7 +15,7 @@
  */
 savantVersion = "1.0.1-{integration}"
 
-project(group: "org.savantbuild", name: "savant-maven-bridge", version: "1.0.2", licenses: ["ApacheV2_0"]) {
+project(group: "org.savantbuild", name: "savant-maven-bridge", version: "1.0.1", licenses: ["ApacheV2_0"]) {
   workflow {
     standard()
   }
