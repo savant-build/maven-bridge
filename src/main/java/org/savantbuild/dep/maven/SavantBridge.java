@@ -151,23 +151,6 @@ public class SavantBridge {
     return text;
   }
 
-  private boolean askYN(String message) {
-    String answer;
-    boolean valid;
-    do {
-      System.out.printf(message + "?\n");
-      try {
-        answer = input.readLine();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-
-      valid = answer != null && (answer.equals("y") || answer.equals("n"));
-    } while (!valid);
-
-    return answer.equals("y");
-  }
-
   /**
    * Recursively populates the Maven dependency graph.
    *
@@ -240,8 +223,8 @@ public class SavantBridge {
       current = current.parent;
     }
 
-    // Remove Test Dependencies if we're not using them before we check versions.
-    mavenArtifact.dependencies.removeIf(dependency -> !includeTestDependencies && dependency.scope.equalsIgnoreCase("test"));
+    // Remove Test Dependencies if we're not using them and they have a scope. We will resolve null scopes next and then remove them again.
+    mavenArtifact.dependencies.removeIf(dependency -> !includeTestDependencies && dependency.scope != null && dependency.scope.equalsIgnoreCase("test"));
 
     // Replace the properties and resolve artifact versions from parent POMs
     mavenArtifact.dependencies.forEach((dependency) -> {
@@ -254,8 +237,8 @@ public class SavantBridge {
         dependency.version = replaceProperties(dependency.version, properties);
       }
 
+      // Attempt to resolve version if it is null
       if (dependency.version == null) {
-        // Attempt to resolve it
         dependency.version = pom.resolveDependencyVersion(dependency);
 
         // Version ok? call replaceProperties
@@ -270,7 +253,28 @@ public class SavantBridge {
               null, "You must supply a version", StringUtils::isNotBlank);
         }
       }
+
+      // If the version is a range, remove the range and use the bottom value
+      if (dependency.version != null && (dependency.version.startsWith("[") || dependency.version.startsWith("("))) {
+        int index = dependency.version.indexOf(',');
+        if (index == -1) {
+          index = dependency.version.indexOf(']');
+          if (index == -1) {
+            index = dependency.version.indexOf(')');
+          }
+        }
+
+        dependency.version = dependency.version.substring(1, index);
+      }
+
+      // Attempt to resolve the scope if it is null. This will always set it to something with the default being 'compile' or 'compile-optional'
+      if (dependency.scope == null) {
+        dependency.scope = pom.resolveDependencyScope(dependency);
+      }
     });
+
+    // Remove Test Dependencies if we're not using them. This has to be done AFTER we resolve everything (unfortunately)
+    mavenArtifact.dependencies.removeIf(dependency -> !includeTestDependencies && dependency.scope.equalsIgnoreCase("test"));
 
     // Remove duplicates
     Set<MavenArtifact> dependencies = new HashSet<>(mavenArtifact.dependencies);
@@ -281,27 +285,26 @@ public class SavantBridge {
     mavenArtifact.dependencies.removeIf((dependency) -> {
       if (prompt()) {
         // Ask if they want to keep it
-        String includeString = ask("Include dependency [" + dependency + "] in scope [" + dependency.scope + "] in the Savant AMD file ([y]es/[n]o) ", "y", "Invalid response",
+        String includeString = ask("Include dependency [" + dependency + "] in scope [" + dependency.scope + "] with optional flag [" + dependency.optional + "] in the Savant AMD file ([y]es/[n]o) ", "y", "Invalid response",
             (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n")));
         boolean include = includeString.equals("y");
         if (include) {
-          dependency.scope = ask("  Enter scope for dependency (provided, compile, compile-optional, runtime, runtime-optional, test-compile, test-runtime). Default: ", dependency.scope, "Invalid response",
-              (response) -> StringUtils.isNotBlank(response) && (response.equals("provided") || response.equals("compile") || response.equals("compile-optional") ||
-                  response.equals("runtime") || response.equals("runtime-optional") || response.equals("test-compile") || response.equals("test-runtime")));
+          dependency.scope = ask("  Enter scope for dependency (provided, compile, runtime, test-compile, test-runtime - but ignore the optional flag, it will be preserved). Default: [optional=" + dependency.optional + "]", dependency.scope, "Invalid response",
+              (response) -> StringUtils.isNotBlank(response) && (response.equals("provided") || response.equals("compile") ||
+                  response.equals("runtime") || response.equals("test-compile") || response.equals("test-runtime")));
         }
 
         return !include;
       } else {
         return false;
       }
-
     });
 
     // Mark the maven artifact as visited and then traverse graph. After the graph has been traversed, remove the artifact
     // from the visited list because that list is only used to check for cycles
     cycleCheck.add(mavenArtifact);
     visitedArtifacts.add(mavenArtifact);
-    mavenArtifact.dependencies.forEach((dependency) -> buildMavenGraph(dependency, cycleCheck, visitedArtifacts));
+    mavenArtifact.dependencies.forEach(dep -> buildMavenGraph(dep, cycleCheck, visitedArtifacts));
     cycleCheck.remove(mavenArtifact);
   }
 
@@ -472,11 +475,7 @@ public class SavantBridge {
 
   private boolean prompt() {
     String prompt = System.getenv("SAVANT_BRIDGE_PROMPT");
-    if (prompt == null || prompt.equals("true")) {
-      return true;
-    } else {
-      return false;
-    }
+    return prompt == null || prompt.equals("true");
   }
 
   private String replaceProperties(String value, Map<String, String> properties) {

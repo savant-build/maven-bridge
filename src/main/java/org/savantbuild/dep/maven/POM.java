@@ -117,6 +117,24 @@ public class POM {
     }
   }
 
+  public String resolveDependencyScope(MavenArtifact dependency) {
+    Optional<MavenArtifact> optional = dependenciesDefinitions.stream().filter((def) -> def.group.equals(dependency.group) && def.id.equals(dependency.id)).findFirst();
+    if ((!optional.isPresent() || optional.get().scope == null) && parent != null) {
+      return parent.resolveDependencyScope(dependency);
+    }
+
+    String scope = null;
+    if (optional.isPresent()) {
+      scope = optional.get().scope;
+    }
+
+    if (scope == null) {
+      scope = "compile";
+    }
+
+    return scope;
+  }
+
   public String resolveDependencyVersion(MavenArtifact dependency) {
     Optional<MavenArtifact> optional = dependenciesDefinitions.stream().filter((def) -> def.group.equals(dependency.group) && def.id.equals(dependency.id)).findFirst();
     if (!optional.isPresent() && parent != null) {
@@ -138,12 +156,6 @@ public class POM {
     artifact.type = element.getChildText("type", element.getNamespace());
     artifact.optional = toBoolean(element.getChildText("optional", element.getNamespace()));
     artifact.scope = element.getChildText("scope", element.getNamespace());
-    if (artifact.scope == null) {
-      artifact.scope = "compile";
-    }
-    if (artifact.optional) {
-      artifact.scope += "-optional";
-    }
 
     if (prompt()) {
       List<Element> exclusions = element.getChildren("exclusions", element.getNamespace());
@@ -161,11 +173,7 @@ public class POM {
 
   private boolean prompt() {
     String prompt = System.getenv("SAVANT_BRIDGE_PROMPT");
-    if (prompt == null || prompt.equals("true")) {
-      return true;
-    } else {
-      return false;
-    }
+    return prompt == null || prompt.equals("true");
   }
 
   private void removeInvalidCharactersInPom(Path file) {

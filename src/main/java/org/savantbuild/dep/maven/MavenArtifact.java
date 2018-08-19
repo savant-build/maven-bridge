@@ -79,18 +79,17 @@ public class MavenArtifact {
 
   public Dependencies getSavantDependencies() {
     Dependencies savantDependencies = new Dependencies();
-    dependencies.forEach((dependency) -> {
-      String groupName = dependency.scope;
-      DependencyGroup savantDependencyGroup = savantDependencies.groups.get(groupName);
-      if (savantDependencyGroup == null) {
-        savantDependencyGroup = new DependencyGroup(groupName, true);
-        savantDependencies.groups.put(groupName, savantDependencyGroup);
-      }
-
+    dependencies.forEach(dependency -> {
+      String groupName = dependency.getSavantScope();
+      DependencyGroup savantDependencyGroup = savantDependencies.groups.computeIfAbsent(groupName, name -> new DependencyGroup(name, true));
       savantDependencyGroup.dependencies.add(new Artifact(dependency.savantArtifact.id, dependency.savantArtifact.version, false));
     });
 
     return savantDependencies;
+  }
+
+  public String getSavantScope() {
+    return scope + (optional ? "-optional" : "");
   }
 
   public String getSourceFile() {
