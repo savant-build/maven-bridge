@@ -31,11 +31,13 @@ import org.savantbuild.dep.domain.ReifiedArtifact;
 public class MavenArtifact {
   public List<MavenArtifact> dependencies = new ArrayList<>();
 
+  public List<MavenArtifact> dependencyTemplates = new ArrayList<>();
+
   public String group;
 
   public String id;
 
-  public boolean optional;
+  public String optional;
 
   public ReifiedArtifact savantArtifact;
 

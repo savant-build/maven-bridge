@@ -69,6 +69,8 @@ public class SavantBridge {
 
   private final DefaultDependencyService service;
 
+  private boolean includeOptionalDependencies;
+
   private boolean includeTestDependencies;
 
   public SavantBridge(Path directory, GroupMappings groupMappings, boolean debug) {
@@ -88,6 +90,7 @@ public class SavantBridge {
     System.out.println("Prompt Enabled [" + prompt() + "]");
 
     includeTestDependencies = ask("Include test dependencies?", "n", "Invalid Response", (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n"))).equals("y");
+    includeOptionalDependencies = ask("Include optional dependencies?", "n", "Invalid Response", (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n"))).equals("y");
 
     MavenArtifact mavenArtifact = new MavenArtifact();
     mavenArtifact.group = ask("Maven group (i.e. commons-collections)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
@@ -240,9 +243,6 @@ public class SavantBridge {
       current = current.parent;
     }
 
-    // Remove Test Dependencies if we're not using them before we check versions.
-    mavenArtifact.dependencies.removeIf(dependency -> !includeTestDependencies && dependency.scope.equalsIgnoreCase("test"));
-
     // Replace the properties and resolve artifact versions from parent POMs
     mavenArtifact.dependencies.forEach((dependency) -> {
       dependency.group = replaceProperties(dependency.group, properties);
@@ -270,7 +270,38 @@ public class SavantBridge {
               null, "You must supply a version", StringUtils::isNotBlank);
         }
       }
+
+      if (dependency.scope == null) {
+        // Attempt to resolve it
+        dependency.scope = pom.resolveDependencyScope(dependency);
+
+        // Scope ok? call replaceProperties
+        if (dependency.scope != null) {
+          dependency.scope = replaceProperties(dependency.scope, properties);
+        }
+
+        // If we're still null, default to compile
+        if (dependency.scope == null) {
+          dependency.scope = "compile";
+        }
+      }
+
+      if (dependency.optional == null) {
+        // Attempt to resolve it
+        dependency.optional = pom.resolveDependencyOptional(dependency);
+
+        // Optional ok? call replaceProperties
+        if (dependency.optional != null) {
+          dependency.optional = replaceProperties(dependency.optional, properties);
+        }
+      }
     });
+
+    // Remove Test Dependencies if we're not using them before we check versions.
+    mavenArtifact.dependencies.removeIf(dependency -> !includeTestDependencies && dependency.scope.equalsIgnoreCase("test"));
+
+    // Remove Optional Dependencies if we're not using them before we check versions.
+    mavenArtifact.dependencies.removeIf(dependency -> !includeOptionalDependencies && dependency.optional != null && dependency.optional.equals("true"));
 
     // Remove duplicates
     Set<MavenArtifact> dependencies = new HashSet<>(mavenArtifact.dependencies);
@@ -280,12 +311,18 @@ public class SavantBridge {
     // Ask which dependencies to include in the AMD
     mavenArtifact.dependencies.removeIf((dependency) -> {
       if (prompt()) {
+        // Use the optional flag if set
+        String scope = dependency.scope;
+        if (dependency.optional != null && dependency.optional.toLowerCase().equals("true")) {
+          scope = dependency.scope + "-optional";
+        }
+
         // Ask if they want to keep it
-        String includeString = ask("Include dependency [" + dependency + "] in scope [" + dependency.scope + "] in the Savant AMD file ([y]es/[n]o) ", "y", "Invalid response",
+        String includeString = ask("Include dependency [" + dependency + "] in scope [" + scope + "] in the Savant AMD file ([y]es/[n]o) ", "y", "Invalid response",
             (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n")));
         boolean include = includeString.equals("y");
         if (include) {
-          dependency.scope = ask("  Enter scope for dependency (provided, compile, compile-optional, runtime, runtime-optional, test-compile, test-runtime). Default: ", dependency.scope, "Invalid response",
+          dependency.scope = ask("  Enter scope for dependency (provided, compile, compile-optional, runtime, runtime-optional, test-compile, test-runtime). Default: ", scope, "Invalid response",
               (response) -> StringUtils.isNotBlank(response) && (response.equals("provided") || response.equals("compile") || response.equals("compile-optional") ||
                   response.equals("runtime") || response.equals("runtime-optional") || response.equals("test-compile") || response.equals("test-runtime")));
         }

@@ -117,17 +117,31 @@ public class POM {
     }
   }
 
+  public String resolveDependencyOptional(MavenArtifact dependency) {
+    Optional<MavenArtifact> optional = dependenciesDefinitions.stream().filter((def) -> def.group.equals(dependency.group) && def.id.equals(dependency.id)).findFirst();
+    if (!optional.isPresent() && parent != null) {
+      return parent.resolveDependencyOptional(dependency);
+    }
+
+    return optional.map(mavenArtifact -> mavenArtifact.optional).orElse(null);
+  }
+
+  public String resolveDependencyScope(MavenArtifact dependency) {
+    Optional<MavenArtifact> optional = dependenciesDefinitions.stream().filter((def) -> def.group.equals(dependency.group) && def.id.equals(dependency.id)).findFirst();
+    if (!optional.isPresent() && parent != null) {
+      return parent.resolveDependencyScope(dependency);
+    }
+
+    return optional.map(mavenArtifact -> mavenArtifact.scope).orElse(null);
+  }
+
   public String resolveDependencyVersion(MavenArtifact dependency) {
     Optional<MavenArtifact> optional = dependenciesDefinitions.stream().filter((def) -> def.group.equals(dependency.group) && def.id.equals(dependency.id)).findFirst();
     if (!optional.isPresent() && parent != null) {
       return parent.resolveDependencyVersion(dependency);
     }
 
-    if (optional.isPresent()) {
-      return optional.get().version;
-    }
-
-    return null;
+    return optional.map(mavenArtifact -> mavenArtifact.version).orElse(null);
   }
 
   private MavenArtifact parseArtifact(Element element) {
@@ -136,14 +150,8 @@ public class POM {
     artifact.id = element.getChildText("artifactId", element.getNamespace());
     artifact.version = element.getChildText("version", element.getNamespace());
     artifact.type = element.getChildText("type", element.getNamespace());
-    artifact.optional = toBoolean(element.getChildText("optional", element.getNamespace()));
+    artifact.optional = element.getChildText("optional", element.getNamespace());
     artifact.scope = element.getChildText("scope", element.getNamespace());
-    if (artifact.scope == null) {
-      artifact.scope = "compile";
-    }
-    if (artifact.optional) {
-      artifact.scope += "-optional";
-    }
 
     if (prompt()) {
       List<Element> exclusions = element.getChildren("exclusions", element.getNamespace());
@@ -178,10 +186,6 @@ public class POM {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-  }
-
-  private boolean toBoolean(String value) {
-    return value != null && Boolean.parseBoolean(value);
   }
 
   private void writeOutBadPom(Path file) {
