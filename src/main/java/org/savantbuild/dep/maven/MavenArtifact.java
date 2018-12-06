@@ -72,6 +72,10 @@ public class MavenArtifact {
         Objects.equals(classifier, that.classifier);
   }
 
+  public String getArtifactName() {
+    return id + (StringUtils.isNotBlank(classifier) ? "-" + classifier : "");
+  }
+
   public String getMainFile() {
     return id + "-" + version + (StringUtils.isNotBlank(classifier) ? "-" + classifier : "") + "." + (type == null ? "jar" : type);
   }
@@ -106,6 +110,9 @@ public class MavenArtifact {
   }
 
   public String toString() {
-    return group + ":" + id + ":" + version + (StringUtils.isNotBlank(classifier) ? "+" + classifier : "") + ":" + (type == null ? "jar" : type);
+    if (StringUtils.isNotBlank(classifier)) {
+      return group + ":" + id + ":" + id + "-" + classifier + ":" + version + ":" + (type == null ? "jar" : type);
+    }
+    return group + ":" + id + ":" + version + ":" + (type == null ? "jar" : type);
   }
 }

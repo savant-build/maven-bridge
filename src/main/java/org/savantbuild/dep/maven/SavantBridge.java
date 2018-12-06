@@ -249,6 +249,8 @@ public class SavantBridge {
       pomFile = downloadItem(parentArtifact, parentArtifact.getPOM());
       current.parent = new POM(pomFile);
       current.parent.properties.forEach(properties::putIfAbsent);
+      current.parent.properties.forEach((key, value) -> properties.putIfAbsent("parent." + key, value));
+      current.parent.properties.forEach((key, value) -> properties.putIfAbsent("project.parent." + key, value));
       mavenArtifact.dependencies.addAll(current.dependencies);
       current = current.parent;
     }
@@ -491,15 +493,15 @@ public class SavantBridge {
       }
     }
 
-    Version savantVersion = getSemanticVersion(mavenArtifact.version + (StringUtils.isNotBlank(mavenArtifact.classifier) ? "+" + mavenArtifact.classifier : ""));
+    Version savantVersion = getSemanticVersion(mavenArtifact.version);
 
     // Don't ask for the licenses if we already have it
     Map<License, String> licenses = Collections.emptyMap();
-    mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.id, (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
+    mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.getArtifactName(), (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
 
     if (cacheProcess.fetch(mavenArtifact.savantArtifact, mavenArtifact.savantArtifact.getArtifactFile(), null) == null) {
       licenses = getLicenses(mavenArtifact);
-      mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.id, (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
+      mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.getArtifactName(), (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
     }
   }
 
