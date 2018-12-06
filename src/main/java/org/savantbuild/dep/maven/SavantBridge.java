@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang.StringUtils;
 import org.savantbuild.dep.DefaultDependencyService;
@@ -38,7 +39,6 @@ import org.savantbuild.dep.domain.License;
 import org.savantbuild.dep.domain.Publication;
 import org.savantbuild.dep.domain.ReifiedArtifact;
 import org.savantbuild.dep.domain.Version;
-import org.savantbuild.dep.domain.VersionException;
 import org.savantbuild.dep.workflow.PublishWorkflow;
 import org.savantbuild.dep.workflow.process.CacheProcess;
 import org.savantbuild.dep.xml.ArtifactTools;
@@ -55,6 +55,16 @@ import static java.util.Arrays.asList;
  * @author Brian Pontarelli
  */
 public class SavantBridge {
+  /**
+   * A stricter regex version of our Version parser.
+   */
+  private static Pattern semanticVersion = Pattern.compile(
+      "^(?:0|[1-9]\\d*)" + // Major (Required)
+          "(?:\\.(?:0|[1-9]\\d*))?" + // Minor (Optional, defaults to 0 later)
+          "(?:\\.(?:0|[1-9]\\d*))?" + // Patch (Optional, defaults to 0 later)
+          "(?:-(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*)" + // Prerelease info (Permits dot or dash separated alpha numeric character segments https://semver.org/#spec-item-10)
+          "?(?:\\+[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*)?$"); // Metadata info (Similar to the prerelease except a little more flexible)
+
   private final CacheProcess cacheProcess;
 
   private final boolean debug;
@@ -158,7 +168,7 @@ public class SavantBridge {
     String answer;
     boolean valid;
     do {
-      System.out.printf(message + "?\n");
+      System.out.print(message + "?\n");
       try {
         answer = input.readLine();
       } catch (IOException e) {
@@ -249,19 +259,15 @@ public class SavantBridge {
       dependency.id = replaceProperties(dependency.id, properties);
       dependency.type = replaceProperties(dependency.type, properties);
       dependency.scope = replaceProperties(dependency.scope, properties);
-
-      if (dependency.version != null) {
-        dependency.version = replaceProperties(dependency.version, properties);
-      }
+      dependency.version = replaceProperties(dependency.version, properties);
+      dependency.classifier = replaceProperties(dependency.classifier, properties);
 
       if (dependency.version == null) {
         // Attempt to resolve it
         dependency.version = pom.resolveDependencyVersion(dependency);
 
         // Version ok? call replaceProperties
-        if (dependency.version != null) {
-          dependency.version = replaceProperties(dependency.version, properties);
-        }
+        dependency.version = replaceProperties(dependency.version, properties);
 
         // If we're still null, ask for it, maybe the human is smarter than me...
         if (dependency.version == null) {
@@ -276,9 +282,7 @@ public class SavantBridge {
         dependency.scope = pom.resolveDependencyScope(dependency);
 
         // Scope ok? call replaceProperties
-        if (dependency.scope != null) {
-          dependency.scope = replaceProperties(dependency.scope, properties);
-        }
+        dependency.scope = replaceProperties(dependency.scope, properties);
 
         // If we're still null, default to compile
         if (dependency.scope == null) {
@@ -291,9 +295,7 @@ public class SavantBridge {
         dependency.optional = pom.resolveDependencyOptional(dependency);
 
         // Optional ok? call replaceProperties
-        if (dependency.optional != null) {
-          dependency.optional = replaceProperties(dependency.optional, properties);
-        }
+        dependency.optional = replaceProperties(dependency.optional, properties);
       }
     });
 
@@ -371,13 +373,13 @@ public class SavantBridge {
 
   private Path downloadItem(MavenArtifact mavenArtifact, String item) {
     try {
-      URI md5URI = NetTools.build("http://repo1.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item + ".md5");
+      URI md5URI = NetTools.build("http://central.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item + ".md5");
       if (debug) {
         System.out.println(" " + md5URI.toString());
       }
       Path md5File = NetTools.downloadToPath(md5URI, null, null, null);
       MD5 md5 = MD5.load(md5File);
-      URI uri = NetTools.build("http://repo1.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item);
+      URI uri = NetTools.build("http://central.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item);
       if (debug) {
         System.out.println(" " + uri.toString());
       }
@@ -429,7 +431,7 @@ public class SavantBridge {
     if (isSemantic(version)) {
 
       if (prompt()) {
-        System.out.printf("The version [%s] appears to be semantic. Does you want to keep it [y]?\n", version);
+        System.out.printf("The version [%s] appears to be semantic. Do you want to keep it [y]?\n", version);
         String answer;
         try {
           answer = input.readLine();
@@ -468,13 +470,7 @@ public class SavantBridge {
   }
 
   private boolean isSemantic(String version) {
-    try {
-      new Version(version);
-    } catch (VersionException e) {
-      return false;
-    }
-
-    return true;
+    return semanticVersion.matcher(version).matches();
   }
 
   private void makeSavantArtifact(MavenArtifact mavenArtifact) {
@@ -495,7 +491,7 @@ public class SavantBridge {
       }
     }
 
-    Version savantVersion = getSemanticVersion(mavenArtifact.version);
+    Version savantVersion = getSemanticVersion(mavenArtifact.version + (StringUtils.isNotBlank(mavenArtifact.classifier) ? "+" + mavenArtifact.classifier : ""));
 
     // Don't ask for the licenses if we already have it
     Map<License, String> licenses = Collections.emptyMap();

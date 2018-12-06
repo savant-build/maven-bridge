@@ -17,7 +17,9 @@ package org.savantbuild.dep.maven;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
+import org.apache.commons.lang.StringUtils;
 import org.savantbuild.dep.domain.Artifact;
 import org.savantbuild.dep.domain.Dependencies;
 import org.savantbuild.dep.domain.DependencyGroup;
@@ -29,6 +31,8 @@ import org.savantbuild.dep.domain.ReifiedArtifact;
  * @author Brian Pontarelli
  */
 public class MavenArtifact {
+  public String classifier;
+
   public List<MavenArtifact> dependencies = new ArrayList<>();
 
   public List<MavenArtifact> dependencyTemplates = new ArrayList<>();
@@ -58,21 +62,18 @@ public class MavenArtifact {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-
+    if (this == o) return true;
+    if (!(o instanceof MavenArtifact)) return false;
     final MavenArtifact that = (MavenArtifact) o;
-    return group.equals(that.group) && id.equals(that.id) &&
-        (type != null ? type.equals(that.type) : that.type == null) &&
-        (version != null ? version.equals(that.version) : that.version == null);
+    return Objects.equals(group, that.group) &&
+        Objects.equals(id, that.id) &&
+        Objects.equals(type, that.type) &&
+        Objects.equals(version, that.version) &&
+        Objects.equals(classifier, that.classifier);
   }
 
   public String getMainFile() {
-    return id + "-" + version + "." + (type == null ? "jar" : type);
+    return id + "-" + version + (StringUtils.isNotBlank(classifier) ? "-" + classifier : "") + "." + (type == null ? "jar" : type);
   }
 
   public String getPOM() {
@@ -96,19 +97,15 @@ public class MavenArtifact {
   }
 
   public String getSourceFile() {
-    return id + "-" + version + "-sources." + (type == null ? "jar" : type);
+    return id + "-" + version + (StringUtils.isNotBlank(classifier) ? "-" + classifier : "") + "-sources." + (type == null ? "jar" : type);
   }
 
   @Override
   public int hashCode() {
-    int result = group.hashCode();
-    result = 31 * result + id.hashCode();
-    result = 31 * result + (type != null ? type.hashCode() : 0);
-    result = 31 * result + (version != null ? version.hashCode() : 0);
-    return result;
+    return Objects.hash(group, id, type, version, classifier);
   }
 
   public String toString() {
-    return group + ":" + id + ":" + version + ":" + (type == null ? "jar" : type);
+    return group + ":" + id + ":" + version + (StringUtils.isNotBlank(classifier) ? "+" + classifier : "") + ":" + (type == null ? "jar" : type);
   }
 }

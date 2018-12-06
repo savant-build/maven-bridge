@@ -31,6 +31,8 @@ import org.jdom2.Element;
 import org.jdom2.JDOMException;
 import org.jdom2.input.SAXBuilder;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 /**
  * The necessary information from the POM.
  *
@@ -149,6 +151,7 @@ public class POM {
     artifact.group = element.getChildText("groupId", element.getNamespace());
     artifact.id = element.getChildText("artifactId", element.getNamespace());
     artifact.version = element.getChildText("version", element.getNamespace());
+    artifact.classifier = element.getChildText("classifier", element.getNamespace());
     artifact.type = element.getChildText("type", element.getNamespace());
     artifact.optional = element.getChildText("optional", element.getNamespace());
     artifact.scope = element.getChildText("scope", element.getNamespace());
@@ -178,10 +181,10 @@ public class POM {
 
   private void removeInvalidCharactersInPom(Path file) {
     try {
-      String pomString = new String(Files.readAllBytes(file), "UTF-8");
+      String pomString = new String(Files.readAllBytes(file), UTF_8);
       if (pomString.contains("&oslash;")) {
         System.out.println("Found and replaced [&oslash;] with [O] to keep the parser from exploding.");
-        Files.write(file, pomString.replace("&oslash;", "O").getBytes("UTF-8"), StandardOpenOption.TRUNCATE_EXISTING);
+        Files.write(file, pomString.replace("&oslash;", "O").getBytes(UTF_8), StandardOpenOption.TRUNCATE_EXISTING);
       }
     } catch (IOException e) {
       throw new RuntimeException(e);
