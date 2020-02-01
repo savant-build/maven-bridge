@@ -375,13 +375,13 @@ public class SavantBridge {
 
   private Path downloadItem(MavenArtifact mavenArtifact, String item) {
     try {
-      URI md5URI = NetTools.build("https://central.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item + ".md5");
+      URI md5URI = NetTools.build("https://repo1.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item + ".md5");
       if (debug) {
         System.out.println(" " + md5URI.toString());
       }
       Path md5File = NetTools.downloadToPath(md5URI, null, null, null);
       MD5 md5 = MD5.load(md5File);
-      URI uri = NetTools.build("https://central.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item);
+      URI uri = NetTools.build("https://repo1.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item);
       if (debug) {
         System.out.println(" " + uri.toString());
       }
