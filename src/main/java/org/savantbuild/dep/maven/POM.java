@@ -111,7 +111,9 @@ public class POM {
       Element dependencyManagement = pomElement.getChild("dependencyManagement", pomElement.getNamespace());
       if (dependencyManagement != null) {
         Element depMgntDeps = dependencyManagement.getChild("dependencies", dependencyManagement.getNamespace());
-        depMgntDeps.getChildren().forEach((element) -> this.dependenciesDefinitions.add(parseArtifact(element)));
+        if (depMgntDeps != null) {
+          depMgntDeps.getChildren().forEach((element) -> this.dependenciesDefinitions.add(parseArtifact(element)));
+        }
       }
     } catch (JDOMException | IOException e) {
       writeOutBadPom(file);
