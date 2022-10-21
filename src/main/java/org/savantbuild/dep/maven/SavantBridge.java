@@ -20,12 +20,14 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -38,16 +40,14 @@ import org.savantbuild.dep.domain.ArtifactMetaData;
 import org.savantbuild.dep.domain.License;
 import org.savantbuild.dep.domain.Publication;
 import org.savantbuild.dep.domain.ReifiedArtifact;
-import org.savantbuild.dep.domain.Version;
 import org.savantbuild.dep.workflow.PublishWorkflow;
 import org.savantbuild.dep.workflow.process.CacheProcess;
 import org.savantbuild.dep.xml.ArtifactTools;
+import org.savantbuild.domain.Version;
 import org.savantbuild.net.NetTools;
 import org.savantbuild.output.Output;
 import org.savantbuild.output.SystemOutOutput;
 import org.savantbuild.security.MD5;
-
-import static java.util.Arrays.asList;
 
 /**
  * The bridge between Maven artifacts and Savant artifacts.
@@ -58,7 +58,7 @@ public class SavantBridge {
   /**
    * A stricter regex version of our Version parser.
    */
-  private static Pattern semanticVersion = Pattern.compile(
+  private static final Pattern semanticVersion = Pattern.compile(
       "^(?:0|[1-9]\\d*)" + // Major (Required)
           "(?:\\.(?:0|[1-9]\\d*))?" + // Minor (Optional, defaults to 0 later)
           "(?:\\.(?:0|[1-9]\\d*))?" + // Patch (Optional, defaults to 0 later)
@@ -73,7 +73,7 @@ public class SavantBridge {
 
   private final BufferedReader input;
 
-  private final Map<String, Map<License, String>> licenseMappings = new HashMap<>();
+  private final Map<String, List<License>> licenseMappings = new HashMap<>();
 
   private final PublishWorkflow publishWorkflow;
 
@@ -84,7 +84,7 @@ public class SavantBridge {
   private boolean includeTestDependencies;
 
   public SavantBridge(Path directory, GroupMappings groupMappings, boolean debug) {
-    this.input = new BufferedReader(new InputStreamReader(System.in, Charset.forName("UTF-8")));
+    this.input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
     this.groupMappings = groupMappings;
 
     Output output = new SystemOutOutput(true);
@@ -137,48 +137,6 @@ public class SavantBridge {
     } while (!valid);
 
     return answer;
-  }
-
-  private String askMultiLine(String message) {
-    System.out.printf(message);
-
-    String text = null;
-    while (text == null) {
-      StringBuilder build = new StringBuilder();
-      String line;
-      try {
-        while ((line = input.readLine()) != null) {
-          build.append(line).append("\n");
-        }
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-
-      text = build.toString().trim();
-      if (text.length() == 0) {
-        System.out.printf("Invalid license text. Please re-enter\n\n");
-        text = null;
-      }
-    }
-
-    return text;
-  }
-
-  private boolean askYN(String message) {
-    String answer;
-    boolean valid;
-    do {
-      System.out.print(message + "?\n");
-      try {
-        answer = input.readLine();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-
-      valid = answer != null && (answer.equals("y") || answer.equals("n"));
-    } while (!valid);
-
-    return answer.equals("y");
   }
 
   /**
@@ -317,7 +275,7 @@ public class SavantBridge {
       if (prompt()) {
         // Use the optional flag if set
         String scope = dependency.scope;
-        if (dependency.optional != null && dependency.optional.toLowerCase().equals("true")) {
+        if (dependency.optional != null && dependency.optional.equalsIgnoreCase("true")) {
           scope = dependency.scope + "-optional";
         }
 
@@ -377,13 +335,13 @@ public class SavantBridge {
     try {
       URI md5URI = NetTools.build("https://repo1.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item + ".md5");
       if (debug) {
-        System.out.println(" " + md5URI.toString());
+        System.out.println(" " + md5URI);
       }
       Path md5File = NetTools.downloadToPath(md5URI, null, null, null);
       MD5 md5 = MD5.load(md5File);
       URI uri = NetTools.build("https://repo1.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item);
       if (debug) {
-        System.out.println(" " + uri.toString());
+        System.out.println(" " + uri);
       }
       return NetTools.downloadToPath(uri, null, null, md5);
     } catch (URISyntaxException | IOException e) {
@@ -391,15 +349,15 @@ public class SavantBridge {
     }
   }
 
-  private Map<License, String> getLicenses(MavenArtifact mavenArtifact) {
-    Map<License, String> licenses = licenseMappings.get(mavenArtifact.group + ":" + mavenArtifact.id);
+  private List<License> getLicenses(MavenArtifact mavenArtifact) {
+    List<License> licenses = licenseMappings.get(mavenArtifact.group + ":" + mavenArtifact.id);
     if (licenses == null) {
-      String licenseNames = ask("License(s) for this artifact - comma-separated list (" + asList(License.values()) + ")", License.ApacheV2_0.toString(), "Invalid license. Please re-enter.\n",
+      String licenseNames = ask("License(s) for this artifact - comma-separated list of SPDX compliant identifiers", "Apache-2.0", "Invalid license. Please re-enter.\n",
           (answer) -> {
             String[] parts = answer.split("\\W*,\\W*");
             for (String part : parts) {
               try {
-                License.valueOf(part);
+                License.parse(part, "Ignored but used for validation.");
               } catch (IllegalArgumentException e) {
                 // Bad license
                 return false;
@@ -408,20 +366,13 @@ public class SavantBridge {
             return true;
           });
 
-      licenses = new HashMap<>();
+      licenses = new ArrayList<>();
       String[] parts = licenseNames.split("\\W*,\\W*");
       for (String part : parts) {
-        License license = License.valueOf(part);
-        String text = null;
-        if (license.requiresText) {
-          text = askMultiLine("The license type [" + license + "] requires license text. Enter it here and terminate your entry with the ctrl-d.\n");
-        }
-
-        licenses.put(license, text);
+        License license = License.parse(part, null);
+        licenses.add(license);
       }
 
-      licenses.keySet().forEach((license) -> {
-      });
       licenseMappings.put(mavenArtifact.group + ":" + mavenArtifact.id, licenses);
     }
 
@@ -496,7 +447,7 @@ public class SavantBridge {
     Version savantVersion = getSemanticVersion(mavenArtifact.version);
 
     // Don't ask for the licenses if we already have it
-    Map<License, String> licenses = Collections.emptyMap();
+    List<License> licenses = Collections.emptyList();
     mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.getArtifactName(), (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
 
     if (cacheProcess.fetch(mavenArtifact.savantArtifact, mavenArtifact.savantArtifact.getArtifactFile(), null) == null) {
@@ -507,11 +458,7 @@ public class SavantBridge {
 
   private boolean prompt() {
     String prompt = System.getenv("SAVANT_BRIDGE_PROMPT");
-    if (prompt == null || prompt.equals("true")) {
-      return true;
-    } else {
-      return false;
-    }
+    return prompt == null || prompt.equals("true");
   }
 
   private String replaceProperties(String value, Map<String, String> properties) {
