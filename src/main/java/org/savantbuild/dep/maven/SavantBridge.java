@@ -19,7 +19,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -102,13 +101,13 @@ public class SavantBridge {
     includeTestDependencies = ask("Include test dependencies?", "n", "Invalid Response", (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n"))).equals("y");
     includeOptionalDependencies = ask("Include optional dependencies?", "n", "Invalid Response", (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n"))).equals("y");
 
-    MavenArtifact mavenArtifact = new MavenArtifact();
-    mavenArtifact.group = ask("Maven group (i.e. commons-collections)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
-    mavenArtifact.id = ask("Maven artifact id (i.e. commons-collections)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
-    mavenArtifact.version = ask("Maven artifact version (i.e. 3.0.GA.1)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
+    MavenDependency mavenDependency = new MavenDependency();
+    mavenDependency.group = ask("Maven group (i.e. commons-collections)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
+    mavenDependency.id = ask("Maven artifact id (i.e. commons-collections)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
+    mavenDependency.version = ask("Maven artifact version (i.e. 3.0.GA.1)", null, "Invalid input. Please re-enter", StringUtils::isNotBlank);
 
-    buildMavenGraph(mavenArtifact, new HashSet<>(), new HashSet<>());
-    downloadAndProcess(mavenArtifact);
+    buildMavenGraph(mavenDependency, new HashSet<>(), new HashSet<>());
+    downloadAndProcess(mavenDependency);
   }
 
   private String ask(String message, String defaultValue, String errorMessage, Predicate<String> predicate) {
@@ -142,24 +141,24 @@ public class SavantBridge {
   /**
    * Recursively populates the Maven dependency graph.
    *
-   * @param mavenArtifact The maven artifact to fetch the graph for.
+   * @param mavenDependency The maven artifact to fetch the graph for.
    */
-  private void buildMavenGraph(MavenArtifact mavenArtifact, Set<MavenArtifact> cycleCheck, Set<MavenArtifact> visitedArtifacts) {
-    if (cycleCheck.contains(mavenArtifact)) {
-      throw new RuntimeException("The Maven artifact you are trying to convert contains a cycle in its dependencies. The cycle is for the artifact [" + mavenArtifact + "]. Cycles are impossible in the real world, so it seems as though someone has jimmied the POM.");
+  private void buildMavenGraph(MavenDependency mavenDependency, Set<MavenDependency> cycleCheck, Set<MavenDependency> visitedArtifacts) {
+    if (cycleCheck.contains(mavenDependency)) {
+      throw new RuntimeException("The Maven artifact you are trying to convert contains a cycle in its dependencies. The cycle is for the artifact [" + mavenDependency + "]. Cycles are impossible in the real world, so it seems as though someone has jimmied the POM.");
     }
 
-    MavenArtifact existing = visitedArtifacts.stream().filter(mavenArtifact::equals).findFirst().orElse(null);
+    MavenDependency existing = visitedArtifacts.stream().filter(mavenDependency::equals).findFirst().orElse(null);
     if (existing != null) {
-      mavenArtifact.savantArtifact = existing.savantArtifact;
+      mavenDependency.savantArtifact = existing.savantArtifact;
       return;
     }
 
-    makeSavantArtifact(mavenArtifact);
+    makeSavantArtifact(mavenDependency);
 
     // If the artifact has already been fetched, skip it
-    if (cacheProcess.fetch(mavenArtifact.savantArtifact, mavenArtifact.savantArtifact.getArtifactFile(), null) != null) {
-      System.out.println("Skipping artifact [" + mavenArtifact.savantArtifact + "] because it already exists in the repository.");
+    if (cacheProcess.fetch(mavenDependency.savantArtifact, mavenDependency.savantArtifact.getArtifactFile(), null) != null) {
+      System.out.println("Skipping artifact [" + mavenDependency.savantArtifact + "] because it already exists in the repository.");
       return;
     }
 
@@ -167,17 +166,17 @@ public class SavantBridge {
     Path pomFile = null;
     // Give the user another change to correct the version before we explode.
     while (tryToDownload) {
-      pomFile = downloadItem(mavenArtifact, mavenArtifact.getPOM());
+      pomFile = downloadItem(mavenDependency, mavenDependency.getPOM());
       if (pomFile == null) {
-        System.out.println("Invalid Maven artifact [" + mavenArtifact + "]. It doesn't appear to exist in the Maven repository. Is it correct?");
+        System.out.println("Invalid Maven artifact [" + mavenDependency + "]. It doesn't appear to exist in the Maven repository. Is it correct?");
         String tryAgainAnswer = ask("Do you want to try again? Verify the version is correct, the version should be as it is defined in the Maven repository.", "y", "Invalid response",
             (response) -> StringUtils.isNotBlank(response) && (response.equals("y") || response.equals("n")));
 
         tryToDownload = tryAgainAnswer.equals("y");
         if (tryToDownload) {
-          mavenArtifact.version = ask("Enter the corrected artifact version", mavenArtifact.version, "Invalid response", StringUtils::isNotBlank);
+          mavenDependency.version = ask("Enter the corrected artifact version", mavenDependency.version, "Invalid response", StringUtils::isNotBlank);
           // update the savant artifact with the new version
-          makeSavantArtifact(mavenArtifact);
+          makeSavantArtifact(mavenDependency);
         }
       } else {
         tryToDownload = false;
@@ -185,7 +184,7 @@ public class SavantBridge {
     }
 
     if (pomFile == null) {
-      throw new RuntimeException("Invalid Maven artifact [" + mavenArtifact + "]. It doesn't appear to exist in the Maven repository. Is it correct?");
+      throw new RuntimeException("Invalid Maven artifact [" + mavenDependency + "]. It doesn't appear to exist in the Maven repository. Is it correct?");
     }
 
     if (debug) {
@@ -196,38 +195,37 @@ public class SavantBridge {
       }
     }
 
-    final POM pom = new POM(pomFile);
+    final POM pom = MavenTools.parsePOM(pomFile, new SystemOutOutput(true));
     final Map<String, String> properties = pom.properties;
-    mavenArtifact.dependencies.addAll(pom.dependencies);
+    mavenDependency.dependencies.addAll(pom.dependencies);
 
     // Load the parent POM's dependencies and properties
-    POM current = pom;
+    POM current = mavenDependency;
     while (current.parentId != null) {
-      MavenArtifact parentArtifact = new MavenArtifact(current.parentGroup, current.parentId, current.parentVersion);
+      MavenDependency parentArtifact = new MavenDependency(current.parentGroup, current.parentId, current.parentVersion);
       pomFile = downloadItem(parentArtifact, parentArtifact.getPOM());
-      current.parent = new POM(pomFile);
+      current.parent = MavenTools.parsePOM(pomFile, new SystemOutOutput(true));
       current.parent.properties.forEach(properties::putIfAbsent);
       current.parent.properties.forEach((key, value) -> properties.putIfAbsent("parent." + key, value));
       current.parent.properties.forEach((key, value) -> properties.putIfAbsent("project.parent." + key, value));
-      mavenArtifact.dependencies.addAll(current.dependencies);
       current = current.parent;
     }
 
     // Replace the properties and resolve artifact versions from parent POMs
-    mavenArtifact.dependencies.forEach((dependency) -> {
-      dependency.group = replaceProperties(dependency.group, properties);
-      dependency.id = replaceProperties(dependency.id, properties);
-      dependency.type = replaceProperties(dependency.type, properties);
-      dependency.scope = replaceProperties(dependency.scope, properties);
-      dependency.version = replaceProperties(dependency.version, properties);
-      dependency.classifier = replaceProperties(dependency.classifier, properties);
+    mavenDependency.dependencies.forEach((dependency) -> {
+      dependency.group = MavenTools.replaceProperties(dependency.group, properties);
+      dependency.id = MavenTools.replaceProperties(dependency.id, properties);
+      dependency.type = MavenTools.replaceProperties(dependency.type, properties);
+      dependency.scope = MavenTools.replaceProperties(dependency.scope, properties);
+      dependency.version = MavenTools.replaceProperties(dependency.version, properties);
+      dependency.classifier = MavenTools.replaceProperties(dependency.classifier, properties);
 
       if (dependency.version == null) {
         // Attempt to resolve it
         dependency.version = pom.resolveDependencyVersion(dependency);
 
         // Version ok? call replaceProperties
-        dependency.version = replaceProperties(dependency.version, properties);
+        dependency.version = MavenTools.replaceProperties(dependency.version, properties);
 
         // If we're still null, ask for it, maybe the human is smarter than me...
         if (dependency.version == null) {
@@ -242,7 +240,7 @@ public class SavantBridge {
         dependency.scope = pom.resolveDependencyScope(dependency);
 
         // Scope ok? call replaceProperties
-        dependency.scope = replaceProperties(dependency.scope, properties);
+        dependency.scope = MavenTools.replaceProperties(dependency.scope, properties);
 
         // If we're still null, default to compile
         if (dependency.scope == null) {
@@ -255,23 +253,23 @@ public class SavantBridge {
         dependency.optional = pom.resolveDependencyOptional(dependency);
 
         // Optional ok? call replaceProperties
-        dependency.optional = replaceProperties(dependency.optional, properties);
+        dependency.optional = MavenTools.replaceProperties(dependency.optional, properties);
       }
     });
 
     // Remove Test Dependencies if we're not using them before we check versions.
-    mavenArtifact.dependencies.removeIf(dependency -> !includeTestDependencies && dependency.scope.equalsIgnoreCase("test"));
+    mavenDependency.dependencies.removeIf(dependency -> !includeTestDependencies && dependency.scope.equalsIgnoreCase("test"));
 
     // Remove Optional Dependencies if we're not using them before we check versions.
-    mavenArtifact.dependencies.removeIf(dependency -> !includeOptionalDependencies && dependency.optional != null && dependency.optional.equals("true"));
+    mavenDependency.dependencies.removeIf(dependency -> !includeOptionalDependencies && dependency.optional != null && dependency.optional.equals("true"));
 
     // Remove duplicates
-    Set<MavenArtifact> dependencies = new HashSet<>(mavenArtifact.dependencies);
-    mavenArtifact.dependencies.clear();
-    mavenArtifact.dependencies.addAll(dependencies);
+    Set<MavenDependency> dependencies = new HashSet<>(mavenDependency.dependencies);
+    mavenDependency.dependencies.clear();
+    mavenDependency.dependencies.addAll(dependencies);
 
     // Ask which dependencies to include in the AMD
-    mavenArtifact.dependencies.removeIf((dependency) -> {
+    mavenDependency.dependencies.removeIf((dependency) -> {
       if (prompt()) {
         // Use the optional flag if set
         String scope = dependency.scope;
@@ -298,22 +296,22 @@ public class SavantBridge {
 
     // Mark the maven artifact as visited and then traverse graph. After the graph has been traversed, remove the artifact
     // from the visited list because that list is only used to check for cycles
-    cycleCheck.add(mavenArtifact);
-    visitedArtifacts.add(mavenArtifact);
-    mavenArtifact.dependencies.forEach((dependency) -> buildMavenGraph(dependency, cycleCheck, visitedArtifacts));
-    cycleCheck.remove(mavenArtifact);
+    cycleCheck.add(mavenDependency);
+    visitedArtifacts.add(mavenDependency);
+    mavenDependency.dependencies.forEach((dependency) -> buildMavenGraph(dependency, cycleCheck, visitedArtifacts));
+    cycleCheck.remove(mavenDependency);
   }
 
-  private void downloadAndProcess(MavenArtifact mavenArtifact) {
+  private void downloadAndProcess(MavenDependency mavenDependency) {
     // Check if the file already exists and if not, fetch it
-    if (cacheProcess.fetch(mavenArtifact.savantArtifact, mavenArtifact.savantArtifact.getArtifactFile(), null) == null) {
-      Path file = downloadItem(mavenArtifact, mavenArtifact.getMainFile());
+    if (cacheProcess.fetch(mavenDependency.savantArtifact, mavenDependency.savantArtifact.getArtifactFile(), null) == null) {
+      Path file = downloadItem(mavenDependency, mavenDependency.getMainFile());
       if (file == null) {
-        throw new RuntimeException("Unable to download Maven artifact " + mavenArtifact);
+        throw new RuntimeException("Unable to download Maven artifact " + mavenDependency);
       }
 
-      Path sourceFile = downloadItem(mavenArtifact, mavenArtifact.getSourceFile());
-      ArtifactMetaData amd = new ArtifactMetaData(mavenArtifact.getSavantDependencies(), mavenArtifact.savantArtifact.licenses);
+      Path sourceFile = downloadItem(mavenDependency, mavenDependency.getSourceFile());
+      ArtifactMetaData amd = new ArtifactMetaData(MavenTools.toSavantDependencies(mavenDependency), mavenDependency.savantArtifact.licenses);
       if (debug) {
         try {
           Path temp = ArtifactTools.generateXML(amd);
@@ -324,33 +322,33 @@ public class SavantBridge {
         }
       }
 
-      Publication publication = new Publication(mavenArtifact.savantArtifact, amd, file, sourceFile);
+      Publication publication = new Publication(mavenDependency.savantArtifact, amd, file, sourceFile);
       service.publish(publication, publishWorkflow);
     }
 
-    mavenArtifact.dependencies.forEach(this::downloadAndProcess);
+    mavenDependency.dependencies.forEach(this::downloadAndProcess);
   }
 
-  private Path downloadItem(MavenArtifact mavenArtifact, String item) {
+  private Path downloadItem(MavenDependency mavenDependency, String item) {
     try {
-      URI md5URI = NetTools.build("https://repo1.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item + ".md5");
+      URI md5URI = NetTools.build("https://repo1.maven.org/maven2", mavenDependency.group.replace('.', '/'), mavenDependency.id, mavenDependency.version, item + ".md5");
       if (debug) {
         System.out.println(" " + md5URI);
       }
       Path md5File = NetTools.downloadToPath(md5URI, null, null, null);
       MD5 md5 = MD5.load(md5File);
-      URI uri = NetTools.build("https://repo1.maven.org/maven2", mavenArtifact.group.replace('.', '/'), mavenArtifact.id, mavenArtifact.version, item);
+      URI uri = NetTools.build("https://repo1.maven.org/maven2", mavenDependency.group.replace('.', '/'), mavenDependency.id, mavenDependency.version, item);
       if (debug) {
         System.out.println(" " + uri);
       }
       return NetTools.downloadToPath(uri, null, null, md5);
-    } catch (URISyntaxException | IOException e) {
+    } catch (IOException e) {
       throw new RuntimeException("ERROR", e);
     }
   }
 
-  private List<License> getLicenses(MavenArtifact mavenArtifact) {
-    List<License> licenses = licenseMappings.get(mavenArtifact.group + ":" + mavenArtifact.id);
+  private List<License> getLicenses(MavenDependency mavenDependency) {
+    List<License> licenses = licenseMappings.get(mavenDependency.group + ":" + mavenDependency.id);
     if (licenses == null) {
       String licenseNames = ask("License(s) for this artifact - comma-separated list of SPDX compliant identifiers", "Apache-2.0", "Invalid license. Please re-enter.\n",
           (answer) -> {
@@ -373,7 +371,7 @@ public class SavantBridge {
         licenses.add(license);
       }
 
-      licenseMappings.put(mavenArtifact.group + ":" + mavenArtifact.id, licenses);
+      licenseMappings.put(mavenDependency.group + ":" + mavenDependency.id, licenses);
     }
 
     return licenses;
@@ -426,50 +424,38 @@ public class SavantBridge {
     return semanticVersion.matcher(version).matches();
   }
 
-  private void makeSavantArtifact(MavenArtifact mavenArtifact) {
+  private void makeSavantArtifact(MavenDependency mavenDependency) {
     System.out.println();
     System.out.println("---------------------------------------------------------------------------------------------------------");
-    System.out.println("Converting Maven artifact [" + mavenArtifact + "] to a Savant Artifact");
+    System.out.println("Converting Maven artifact [" + mavenDependency + "] to a Savant Artifact");
     System.out.println("---------------------------------------------------------------------------------------------------------");
 
-    String savantGroup = groupMappings.map(mavenArtifact.group);
-    if (!savantGroup.equals(mavenArtifact.group)) {
-      System.out.println("Mapped Maven group [" + mavenArtifact.group + "] to Savant group [" + savantGroup + "]");
+    String savantGroup = groupMappings.map(mavenDependency.group);
+    if (!savantGroup.equals(mavenDependency.group)) {
+      System.out.println("Mapped Maven group [" + mavenDependency.group + "] to Savant group [" + savantGroup + "]");
     } else if (!savantGroup.contains(".")) {
-      savantGroup = ask("That group looks weaksauce. Enter the group to use with Savant", mavenArtifact.group, null, null);
+      savantGroup = ask("That group looks weaksauce. Enter the group to use with Savant", mavenDependency.group, null, null);
 
       // Store the mapping if they changed the group
-      if (!mavenArtifact.group.equals(savantGroup)) {
-        groupMappings.add(mavenArtifact.group, savantGroup);
+      if (!mavenDependency.group.equals(savantGroup)) {
+        groupMappings.add(mavenDependency.group, savantGroup);
       }
     }
 
-    Version savantVersion = getSemanticVersion(mavenArtifact.version);
+    Version savantVersion = getSemanticVersion(mavenDependency.version);
 
     // Don't ask for the licenses if we already have it
     List<License> licenses = Collections.emptyList();
-    mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.getArtifactName(), (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
+    mavenDependency.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenDependency.id, mavenDependency.getArtifactName(), (mavenDependency.type == null ? "jar" : mavenDependency.type)), savantVersion, licenses);
 
-    if (cacheProcess.fetch(mavenArtifact.savantArtifact, mavenArtifact.savantArtifact.getArtifactFile(), null) == null) {
-      licenses = getLicenses(mavenArtifact);
-      mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.getArtifactName(), (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
+    if (cacheProcess.fetch(mavenDependency.savantArtifact, mavenDependency.savantArtifact.getArtifactFile(), null) == null) {
+      licenses = getLicenses(mavenDependency);
+      mavenDependency.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenDependency.id, mavenDependency.getArtifactName(), (mavenDependency.type == null ? "jar" : mavenDependency.type)), savantVersion, licenses);
     }
   }
 
   private boolean prompt() {
     String prompt = System.getenv("SAVANT_BRIDGE_PROMPT");
     return prompt == null || prompt.equals("true");
-  }
-
-  private String replaceProperties(String value, Map<String, String> properties) {
-    if (value == null) {
-      return null;
-    }
-
-    for (String key : properties.keySet()) {
-      value = value.replace("${" + key + "}", properties.get(key));
-    }
-
-    return value;
   }
 }
