@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Inversoft Inc., All Rights Reserved
+ * Copyright (c) 2014-2023, Inversoft Inc., All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,7 +94,7 @@ public class MavenArtifact {
         savantDependencies.groups.put(groupName, savantDependencyGroup);
       }
 
-      savantDependencyGroup.dependencies.add(new Artifact(dependency.savantArtifact.id, dependency.savantArtifact.version, false));
+      savantDependencyGroup.dependencies.add(new Artifact(dependency.savantArtifact.id, dependency.savantArtifact.version, null));
     });
 
     return savantDependencies;

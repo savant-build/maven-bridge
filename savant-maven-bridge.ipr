@@ -37,7 +37,6 @@
     </option>
   </component>
   <component name="CompilerConfiguration">
-    <option name="DEFAULT_COMPILER" value="Javac" />
     <resourceExtensions>
       <entry name=".+\.(properties|xml|html|dtd|tld)" />
       <entry name=".+\.(gif|png|jpeg|jpg)" />
@@ -63,25 +62,20 @@
       <entry name="?*.jpeg" />
       <entry name="?*.jpg" />
     </wildcardResourcePatterns>
-    <annotationProcessing>
-      <profile default="true" name="Default" enabled="false">
-        <processorPath useClasspath="true" />
-      </profile>
-    </annotationProcessing>
   </component>
   <component name="CopyrightManager" default="">
-    <copyright>
-      <option name="notice" value="Copyright (c) &amp;#36;today.year, Inversoft Inc., All Rights Reserved" />
-      <option name="keyword" value="Copyright" />
-      <option name="allowReplaceKeyword" value="" />
-      <option name="myName" value="Inversoft" />
-      <option name="myLocal" value="true" />
-    </copyright>
     <copyright>
       <option name="notice" value="Copyright (c) 2001-&amp;#36;today.year, Inversoft, All Rights Reserved&#10;&#10;Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);&#10;you may not use this file except in compliance with the License.&#10;You may obtain a copy of the License at&#10;&#10;  http://www.apache.org/licenses/LICENSE-2.0&#10;&#10;Unless required by applicable law or agreed to in writing,&#10;software distributed under the License is distributed on an&#10;&quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,&#10;either express or implied. See the License for the specific&#10;language governing permissions and limitations under the License." />
       <option name="keyword" value="Copyright" />
       <option name="allowReplaceKeyword" value="" />
       <option name="myName" value="Apache" />
+      <option name="myLocal" value="true" />
+    </copyright>
+    <copyright>
+      <option name="notice" value="Copyright (c) &amp;#36;today.year, Inversoft Inc., All Rights Reserved" />
+      <option name="keyword" value="Copyright" />
+      <option name="allowReplaceKeyword" value="" />
+      <option name="myName" value="Inversoft" />
       <option name="myLocal" value="true" />
     </copyright>
     <module2copyright>
@@ -120,41 +114,11 @@
       </map>
     </option>
   </component>
-  <component name="Encoding" useUTFGuessing="true" native2AsciiForPropertiesFiles="false" />
-  <component name="EntryPointsManager">
-    <entry_points version="2.0" />
-  </component>
   <component name="IdProvider" IDEtalkID="ECC60680B5617E07A3164BBE79CDFF18" />
   <component name="InspectionProjectProfileManager">
-    <profiles>
-      <profile version="1.0" is_locked="false">
-        <option name="myName" value="Project Default" />
-        <option name="myLocal" value="false" />
-        <inspection_tool class="CheckedExceptionClass" enabled="true" level="WARNING" enabled_by_default="true" />
-        <inspection_tool class="NullableProblems" enabled="false" level="WARNING" enabled_by_default="false">
-          <option name="REPORT_NULLABLE_METHOD_OVERRIDES_NOTNULL" value="true" />
-          <option name="REPORT_NOT_ANNOTATED_METHOD_OVERRIDES_NOTNULL" value="true" />
-          <option name="REPORT_NOTNULL_PARAMETER_OVERRIDES_NULLABLE" value="true" />
-          <option name="REPORT_NOT_ANNOTATED_PARAMETER_OVERRIDES_NOTNULL" value="true" />
-          <option name="REPORT_NOT_ANNOTATED_GETTER" value="true" />
-          <option name="REPORT_NOT_ANNOTATED_SETTER_PARAMETER" value="true" />
-          <option name="REPORT_ANNOTATION_NOT_PROPAGATED_TO_OVERRIDERS" value="true" />
-          <option name="REPORT_NULLS_PASSED_TO_NON_ANNOTATED_METHOD" value="true" />
-        </inspection_tool>
-        <inspection_tool class="groupsTestNG" enabled="true" level="WARNING" enabled_by_default="true">
-          <option name="groups">
-            <value>
-              <list size="2">
-                <item index="0" class="java.lang.String" itemvalue="unit" />
-                <item index="1" class="java.lang.String" itemvalue="functional" />
-              </list>
-            </value>
-          </option>
-        </inspection_tool>
-      </profile>
-    </profiles>
-    <option name="PROJECT_PROFILE" value="Project Default" />
-    <option name="USE_PROJECT_PROFILE" value="true" />
+    <profile version="1.0">
+      <option name="myName" value="Project Default" />
+    </profile>
     <version value="1.0" />
   </component>
   <component name="JavadocGenerationManager">
@@ -317,7 +281,7 @@
   <component name="ProjectResources">
     <default-html-doctype>http://www.w3.org/1999/xhtml</default-html-doctype>
   </component>
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" assert-keyword="true" jdk-15="true" project-jdk-name="1.8" project-jdk-type="JavaSDK">
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_17" project-jdk-name="Java 17" project-jdk-type="JavaSDK">
     <output url="file://$PROJECT_DIR$/out" />
   </component>
   <component name="ProjectRunConfigurationManager">
@@ -385,8 +349,7 @@
     <option name="mySupportsUserInfoFilter" value="true" />
   </component>
   <component name="VcsDirectoryMappings">
-    <mapping directory="" vcs="" />
+    <mapping directory="$PROJECT_DIR$" vcs="Git" />
   </component>
   <component name="WebServicesPlugin" addRequiredLibraries="true" />
 </project>
-

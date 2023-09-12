@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020, Inversoft Inc., All Rights Reserved
+ * Copyright (c) 2014-2023, Inversoft Inc., All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,6 +39,7 @@ import org.savantbuild.dep.domain.ArtifactMetaData;
 import org.savantbuild.dep.domain.License;
 import org.savantbuild.dep.domain.Publication;
 import org.savantbuild.dep.domain.ReifiedArtifact;
+import org.savantbuild.dep.domain.ResolvableItem;
 import org.savantbuild.dep.workflow.PublishWorkflow;
 import org.savantbuild.dep.workflow.process.CacheProcess;
 import org.savantbuild.dep.xml.ArtifactTools;
@@ -91,7 +91,7 @@ public class SavantBridge {
     this.service = new DefaultDependencyService(output);
 
     // Cache only workflow that will check if the artifact coming from Maven already exists in our repository
-    this.cacheProcess = new CacheProcess(output, directory.toString());
+    this.cacheProcess = new CacheProcess(output, directory.toString(), null);
     this.publishWorkflow = new PublishWorkflow(this.cacheProcess);
     this.debug = debug;
   }
@@ -158,7 +158,8 @@ public class SavantBridge {
     makeSavantArtifact(mavenArtifact);
 
     // If the artifact has already been fetched, skip it
-    if (cacheProcess.fetch(mavenArtifact.savantArtifact, mavenArtifact.savantArtifact.getArtifactFile(), null) != null) {
+    ResolvableItem item = new ResolvableItem(mavenArtifact.savantArtifact.id.group, mavenArtifact.savantArtifact.id.project, mavenArtifact.savantArtifact.id.name, mavenArtifact.version, mavenArtifact.savantArtifact.getArtifactFile());
+    if (cacheProcess.fetch(item, null) != null) {
       System.out.println("Skipping artifact [" + mavenArtifact.savantArtifact + "] because it already exists in the repository.");
       return;
     }
@@ -306,7 +307,8 @@ public class SavantBridge {
 
   private void downloadAndProcess(MavenArtifact mavenArtifact) {
     // Check if the file already exists and if not, fetch it
-    if (cacheProcess.fetch(mavenArtifact.savantArtifact, mavenArtifact.savantArtifact.getArtifactFile(), null) == null) {
+    ResolvableItem item = new ResolvableItem(mavenArtifact.savantArtifact.id.group, mavenArtifact.savantArtifact.id.project, mavenArtifact.savantArtifact.id.name, mavenArtifact.version, mavenArtifact.savantArtifact.getArtifactFile());
+    if (cacheProcess.fetch(item, null) == null) {
       Path file = downloadItem(mavenArtifact, mavenArtifact.getMainFile());
       if (file == null) {
         throw new RuntimeException("Unable to download Maven artifact " + mavenArtifact);
@@ -344,7 +346,7 @@ public class SavantBridge {
         System.out.println(" " + uri);
       }
       return NetTools.downloadToPath(uri, null, null, md5);
-    } catch (URISyntaxException | IOException e) {
+    } catch (IOException e) {
       throw new RuntimeException("ERROR", e);
     }
   }
@@ -369,6 +371,15 @@ public class SavantBridge {
       licenses = new ArrayList<>();
       String[] parts = licenseNames.split("\\W*,\\W*");
       for (String part : parts) {
+        // TODO : Seems like we should catch LicenseException here and allow the user to retry.
+        //        - Currently we puke and you have to start over.
+        //        - Ideally on a parse failure, we'd print out the valid SPDX names,
+        //          or provide a 'help' option to ask for the valid SPDX names.
+        //
+        // TODO : If you specify 'Other' it will fail to parse because we need text.
+        //        We used to have the ability to specify 'Other' and provide text.
+        //        Is that path intentionally no longer supported, or can we add it back?
+
         License license = License.parse(part, null);
         licenses.add(license);
       }
@@ -450,7 +461,8 @@ public class SavantBridge {
     List<License> licenses = Collections.emptyList();
     mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.getArtifactName(), (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
 
-    if (cacheProcess.fetch(mavenArtifact.savantArtifact, mavenArtifact.savantArtifact.getArtifactFile(), null) == null) {
+    ResolvableItem item = new ResolvableItem(mavenArtifact.savantArtifact.id.group, mavenArtifact.savantArtifact.id.project, mavenArtifact.savantArtifact.id.name, mavenArtifact.version, mavenArtifact.savantArtifact.getArtifactFile());
+    if (cacheProcess.fetch(item, null) == null) {
       licenses = getLicenses(mavenArtifact);
       mavenArtifact.savantArtifact = new ReifiedArtifact(new ArtifactID(savantGroup, mavenArtifact.id, mavenArtifact.getArtifactName(), (mavenArtifact.type == null ? "jar" : mavenArtifact.type)), savantVersion, licenses);
     }
